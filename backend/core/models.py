@@ -55,5 +55,8 @@ class MemoryEntry(models.Model):
     fact = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name_plural = "Memory Entries"
+        
     def __str__(self):
         return self.fact[:50]
