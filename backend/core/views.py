@@ -1,3 +1,4 @@
+import json
 import groq
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30,12 +31,12 @@ class SuggestView(APIView):
                 contact_id=session.contact_id,
             )
             is_fallback = False
-        except (groq.APIError, __import__("json").JSONDecodeError) as e:
+        except (groq.APIError, json.JSONDecodeError) as e:
             print(f"[SuggestView] Falling back — {type(e).__name__}: {e}")
             result = {"replies": FALLBACK_REPLIES, "setting": "general"}
             is_fallback = True
 
-        SuggestionLog.objects.create(
+        suggestion_log = SuggestionLog.objects.create(
             session=session,
             message=message,
             suggestions_shown=result["replies"],
@@ -44,4 +45,33 @@ class SuggestView(APIView):
 
         session.save()
 
-        return Response({**result, "fallback": is_fallback})
+        return Response({**result, "fallback": is_fallback, "suggestion_log_id": suggestion_log.id})
+
+
+class SelectSuggestionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        suggestion_log_id = request.data.get("suggestion_log_id")
+        selected_text = request.data.get("selected")
+
+        if not suggestion_log_id or not selected_text:
+            return Response({"error": "suggestion_log_id and selected are required"}, status=400)
+
+        try:
+            log = SuggestionLog.objects.get(
+                id=suggestion_log_id,
+                session_id=session_id,
+                session__user=request.user,
+            )
+        except SuggestionLog.DoesNotExist:
+            return Response({"error": "Suggestion log not found"}, status=404)
+
+        if selected_text not in log.suggestions_shown:
+            return Response({"error": "Selected suggestion was not shown"}, status=400)
+
+        log.suggestion_selected = selected_text
+        log.save()
+        log.session.save()
+
+        return Response({"status": "recorded"})
