@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     SuggestView, SelectSuggestionView, EndSessionView,
     SaveAsContactView, DiscardSessionView,
+    MemoryListView, MemoryEntryDeleteView, ContactMemoryDeleteView,
 )
 
 urlpatterns = [
@@ -10,4 +11,7 @@ urlpatterns = [
     path('sessions/<int:session_id>/end/', EndSessionView.as_view(), name='end_session'),
     path('sessions/<int:session_id>/save-contact/', SaveAsContactView.as_view(), name='save_as_contact'),
     path('sessions/<int:session_id>/discard/', DiscardSessionView.as_view(), name='discard_session'),
+    path('memory/', MemoryListView.as_view(), name='memory_list'),
+    path('memory/<int:entry_id>/', MemoryEntryDeleteView.as_view(), name='memory_entry_delete'),
+    path('memory/contact/<int:contact_id>/', ContactMemoryDeleteView.as_view(), name='contact_memory_delete'),
 ]

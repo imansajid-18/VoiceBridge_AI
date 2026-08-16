@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Contact, ConversationSession, Message, SuggestionLog
+from .models import Contact, ConversationSession, Message, SuggestionLog, MemoryEntry
 
 
 class SuggestViewTests(APITestCase):
@@ -190,3 +190,47 @@ class SaveDiscardTests(APITestCase):
         mock_agent.assert_not_called()
         self.assertFalse(ConversationSession.objects.filter(id=session_id).exists())
         self.assertFalse(Message.objects.filter(session_id=session_id).exists())
+
+class MemoryViewerTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="memuser", password="testpass123")
+        self.other_user = User.objects.create_user(username="memother", password="testpass123")
+        self.contact = Contact.objects.create(user=self.user, name="Sara")
+
+        self.general = MemoryEntry.objects.create(user=self.user, contact=None, fact="Says In Sha Allah")
+        self.contact_fact = MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Likes coffee")
+        self.other_fact = MemoryEntry.objects.create(user=self.other_user, contact=None, fact="Not yours")
+
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    def test_list_separates_general_and_contact_memory(self):
+        response = self.client.get("/api/memory/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["general_facts"]), 1)
+        self.assertEqual(response.data["general_facts"][0]["fact"], "Says In Sha Allah")
+        self.assertEqual(len(response.data["contacts"]), 1)
+        self.assertEqual(response.data["contacts"][0]["contact_name"], "Sara")
+
+    def test_cannot_delete_another_users_memory(self):
+        response = self.client.delete(f"/api/memory/{self.other_fact.id}/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(MemoryEntry.objects.filter(id=self.other_fact.id).exists())
+
+    def test_delete_single_entry(self):
+        response = self.client.delete(f"/api/memory/{self.general.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(MemoryEntry.objects.filter(id=self.general.id).exists())
+
+    def test_delete_all_memory_for_a_contact(self):
+        MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Studies at university")
+
+        response = self.client.delete(f"/api/memory/contact/{self.contact.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertFalse(MemoryEntry.objects.filter(contact=self.contact).exists())
+        self.assertTrue(MemoryEntry.objects.filter(id=self.general.id).exists())

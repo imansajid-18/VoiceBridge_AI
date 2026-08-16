@@ -154,3 +154,50 @@ class DiscardSessionView(APIView):
 
         session.delete()
         return Response({"status": "discarded"})
+
+class MemoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        entries = MemoryEntry.objects.filter(user=request.user).select_related("contact").order_by("-created_at")
+
+        general = [
+            {"id": e.id, "fact": e.fact, "created_at": e.created_at}
+            for e in entries if e.contact_id is None
+        ]
+
+        by_contact = {}
+        for e in entries:
+            if e.contact_id is None:
+                continue
+            by_contact.setdefault(
+                e.contact_id, {"contact_id": e.contact_id, "contact_name": e.contact.name, "facts": []}
+            )["facts"].append({"id": e.id, "fact": e.fact, "created_at": e.created_at})
+
+        return Response({"general_facts": general, "contacts": list(by_contact.values())})
+
+
+class MemoryEntryDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, entry_id):
+        try:
+            entry = MemoryEntry.objects.get(id=entry_id, user=request.user)
+        except MemoryEntry.DoesNotExist:
+            return Response({"error": "Memory entry not found"}, status=404)
+
+        entry.delete()
+        return Response({"status": "deleted"})
+
+
+class ContactMemoryDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, user=request.user)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=404)
+
+        deleted_count, _ = MemoryEntry.objects.filter(user=request.user, contact=contact).delete()
+        return Response({"status": "deleted", "count": deleted_count})
