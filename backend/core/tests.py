@@ -102,6 +102,30 @@ class SelectSuggestionViewTests(APITestCase):
         self.log.refresh_from_db()
         self.assertIsNone(self.log.suggestion_selected)
 
+class LookupProfileTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="lpuser", password="testpass123")
+        self.contact = Contact.objects.create(user=self.user, name="Sara")
+        self.other_user = User.objects.create_user(username="lpother", password="testpass123")
+
+    def test_returns_general_and_contact_facts(self):
+        from core.tools import lookup_profile
+        MemoryEntry.objects.create(user=self.user, contact=None, fact="Says In Sha Allah")
+        MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Likes coffee")
+
+        facts = lookup_profile(user_id=self.user.id, contact_id=self.contact.id)
+
+        self.assertIn("Says In Sha Allah", facts)
+        self.assertIn("Likes coffee", facts)
+
+    def test_excludes_other_users_facts(self):
+        from core.tools import lookup_profile
+        MemoryEntry.objects.create(user=self.other_user, contact=None, fact="Not yours")
+
+        facts = lookup_profile(user_id=self.user.id)
+
+        self.assertEqual(facts, [])
+
 class EndSessionViewTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="enduser", password="testpass123")
@@ -234,3 +258,12 @@ class MemoryViewerTests(APITestCase):
         self.assertEqual(response.data["count"], 2)
         self.assertFalse(MemoryEntry.objects.filter(contact=self.contact).exists())
         self.assertTrue(MemoryEntry.objects.filter(id=self.general.id).exists())
+
+class StripMarkdownFenceTests(APITestCase):
+    def test_strips_json_fence(self):
+        from core.memory_agent import _strip_markdown_fence
+        self.assertEqual(_strip_markdown_fence('```json\n{"a": 1}\n```'), '{"a": 1}')
+
+    def test_leaves_plain_json_alone(self):
+        from core.memory_agent import _strip_markdown_fence
+        self.assertEqual(_strip_markdown_fence('{"a": 1}'), '{"a": 1}')
