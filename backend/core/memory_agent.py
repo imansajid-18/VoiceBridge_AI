@@ -5,7 +5,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import openai
 from openai import OpenAI
-from .models import Message, SuggestionLog
+from .models import Message, SuggestionLog, MemoryEntry
+
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
@@ -74,3 +75,30 @@ def run_memory_agent(session_id):
             model="gemini-3.5-flash-lite", messages=messages, timeout=10, max_completion_tokens=1024,
         )
         return _extract_json(response, "gemini-3.5-flash-lite")
+
+
+def save_memory_facts(session, facts):
+    """
+    Writes extracted facts to MemoryEntry.
+    - general_facts: saved with contact=None (true regardless of who they're talking to)
+    - contact_facts: saved against this session's contact, if there is one
+    Skips exact duplicates so repeated conversations don't pile up identical rows.
+    """
+    created = []
+
+    for fact in facts.get("general_facts", []):
+        entry, was_created = MemoryEntry.objects.get_or_create(
+            user=session.user, contact=None, fact=fact,
+        )
+        if was_created:
+            created.append(entry)
+
+    if session.contact_id:
+        for fact in facts.get("contact_facts", []):
+            entry, was_created = MemoryEntry.objects.get_or_create(
+                user=session.user, contact_id=session.contact_id, fact=fact,
+            )
+            if was_created:
+                created.append(entry)
+
+    return created

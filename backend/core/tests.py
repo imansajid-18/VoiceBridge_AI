@@ -101,3 +101,92 @@ class SelectSuggestionViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.log.refresh_from_db()
         self.assertIsNone(self.log.suggestion_selected)
+
+class EndSessionViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="enduser", password="testpass123")
+        self.contact = Contact.objects.create(user=self.user, name="Sara")
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    @patch("core.views.save_memory_facts")
+    @patch("core.views.run_memory_agent")
+    def test_known_contact_extracts_and_saves(self, mock_agent, mock_save):
+        mock_agent.return_value = {"general_facts": ["Says In Sha Allah"], "contact_facts": ["Likes coffee"]}
+        session = ConversationSession.objects.create(user=self.user, contact=self.contact)
+
+        response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ended")
+        mock_agent.assert_called_once()
+        mock_save.assert_called_once()
+        session.refresh_from_db()
+        self.assertEqual(session.status, "ended")
+        self.assertIsNotNone(session.ended_at)
+
+    @patch("core.views.run_memory_agent")
+    def test_stranger_does_not_call_gemini(self, mock_agent):
+        session = ConversationSession.objects.create(user=self.user, contact=None)
+
+        response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "pending_decision")
+        mock_agent.assert_not_called()
+        session.refresh_from_db()
+        self.assertEqual(session.status, "pending_decision")
+
+    def test_cannot_end_an_already_ended_session(self):
+        session = ConversationSession.objects.create(user=self.user, contact=self.contact, status="ended")
+        response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+
+class SaveDiscardTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sduser", password="testpass123")
+        self.session = ConversationSession.objects.create(
+            user=self.user, contact=None, status="pending_decision",
+        )
+        self.message = Message.objects.create(session=self.session, speaker="partner", text="Nice to meet you")
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    @patch("core.views.save_memory_facts")
+    @patch("core.views.run_memory_agent")
+    def test_save_creates_contact_and_runs_agent_once(self, mock_agent, mock_save):
+        mock_agent.return_value = {"general_facts": [], "contact_facts": ["Met at a cafe"]}
+
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/save-contact/", {"name": "Ahmed"}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Contact.objects.filter(user=self.user, name="Ahmed").exists())
+        mock_agent.assert_called_once()
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.status, "ended")
+        self.assertEqual(self.session.contact.name, "Ahmed")
+
+    def test_save_warns_on_duplicate_name(self):
+        Contact.objects.create(user=self.user, name="Ahmed")
+
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/save-contact/", {"name": "ahmed"}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["warning"], "duplicate_name")
+        self.assertEqual(Contact.objects.filter(user=self.user).count(), 1)
+
+    @patch("core.views.run_memory_agent")
+    def test_discard_deletes_everything_and_never_calls_gemini(self, mock_agent):
+        session_id = self.session.id
+
+        response = self.client.post(f"/api/sessions/{session_id}/discard/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        mock_agent.assert_not_called()
+        self.assertFalse(ConversationSession.objects.filter(id=session_id).exists())
+        self.assertFalse(Message.objects.filter(session_id=session_id).exists())

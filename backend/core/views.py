@@ -3,8 +3,10 @@ import groq
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ConversationSession, Message, SuggestionLog
 from .agent import run_suggestion_agent
+from django.utils import timezone
+from .models import Contact, ConversationSession, Message, SuggestionLog, MemoryEntry
+from .memory_agent import run_memory_agent, save_memory_facts
 
 FALLBACK_REPLIES = ["Yes", "No", "Can you repeat that?"]
 
@@ -75,3 +77,80 @@ class SelectSuggestionView(APIView):
         log.session.save()
 
         return Response({"status": "recorded"})
+
+class EndSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        try:
+            session = ConversationSession.objects.get(id=session_id, user=request.user)
+        except ConversationSession.DoesNotExist:
+            return Response({"error": "Session not found"}, status=404)
+
+        if session.status in ("ended", "discarded"):
+            return Response({"error": "Session already closed"}, status=400)
+
+        if not session.contact_id:
+            session.status = "pending_decision"
+            session.save()
+            return Response({"status": "pending_decision"})
+
+        try:
+            facts = run_memory_agent(session.id)
+            save_memory_facts(session, facts)
+        except Exception as e:
+            print(f"[EndSession] Memory extraction failed — {type(e).__name__}: {e}")
+            facts = {"general_facts": [], "contact_facts": []}
+
+        session.status = "ended"
+        session.ended_at = timezone.now()
+        session.save()
+        return Response({"status": "ended", "saved_facts": facts})
+
+class SaveAsContactView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return Response({"error": "name is required"}, status=400)
+
+        try:
+            session = ConversationSession.objects.get(
+                id=session_id, user=request.user, status="pending_decision",
+            )
+        except ConversationSession.DoesNotExist:
+            return Response({"error": "No session awaiting a decision"}, status=404)
+
+        existing = Contact.objects.filter(user=request.user, name__iexact=name).first()
+        if existing and not request.data.get("confirm_duplicate"):
+            return Response(
+                {"warning": "duplicate_name", "message": f"You already have a contact named {existing.name}."},
+                status=409,
+            )
+
+        contact = Contact.objects.create(user=request.user, name=name)
+        session.contact = contact
+        session.status = "ended"
+        session.ended_at = timezone.now()
+        session.save()
+
+        facts = run_memory_agent(session.id)
+        save_memory_facts(session, facts)
+
+        return Response({"status": "saved", "contact_id": contact.id, "saved_facts": facts})
+
+
+class DiscardSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        try:
+            session = ConversationSession.objects.get(
+                id=session_id, user=request.user, status="pending_decision",
+            )
+        except ConversationSession.DoesNotExist:
+            return Response({"error": "No session awaiting a decision"}, status=404)
+
+        session.delete()
+        return Response({"status": "discarded"})
