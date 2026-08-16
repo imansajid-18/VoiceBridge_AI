@@ -3,9 +3,13 @@ from .views import (
     SuggestView, SelectSuggestionView, EndSessionView,
     SaveAsContactView, DiscardSessionView,
     MemoryListView, MemoryEntryDeleteView, ContactMemoryDeleteView,
+    ContactListCreateView, ContactDeleteView, SessionCreateView,
 )
 
 urlpatterns = [
+    path('contacts/', ContactListCreateView.as_view(), name='contact_list_create'),
+    path('contacts/<int:contact_id>/', ContactDeleteView.as_view(), name='contact_delete'),
+    path('sessions/', SessionCreateView.as_view(), name='session_create'),
     path('sessions/<int:session_id>/suggest/', SuggestView.as_view(), name='suggest'),
     path('sessions/<int:session_id>/select/', SelectSuggestionView.as_view(), name='select_suggestion'),
     path('sessions/<int:session_id>/end/', EndSessionView.as_view(), name='end_session'),

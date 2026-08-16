@@ -201,3 +201,61 @@ class ContactMemoryDeleteView(APIView):
 
         deleted_count, _ = MemoryEntry.objects.filter(user=request.user, contact=contact).delete()
         return Response({"status": "deleted", "count": deleted_count})
+
+class ContactListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        contacts = Contact.objects.filter(user=request.user).order_by("name")
+        return Response([
+            {"id": c.id, "name": c.name, "created_at": c.created_at} for c in contacts
+        ])
+
+    def post(self, request):
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return Response({"error": "name is required"}, status=400)
+
+        existing = Contact.objects.filter(user=request.user, name__iexact=name).first()
+        if existing and not request.data.get("confirm_duplicate"):
+            return Response(
+                {"warning": "duplicate_name", "message": f"You already have a contact named {existing.name}."},
+                status=409,
+            )
+
+        contact = Contact.objects.create(user=request.user, name=name)
+        return Response({"id": contact.id, "name": contact.name}, status=201)
+
+
+class ContactDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, user=request.user)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=404)
+
+        contact.delete()
+        return Response({"status": "deleted"})
+
+
+class SessionCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        contact_id = request.data.get("contact_id")
+        contact = None
+
+        if contact_id:
+            try:
+                contact = Contact.objects.get(id=contact_id, user=request.user)
+            except Contact.DoesNotExist:
+                return Response({"error": "Contact not found"}, status=404)
+
+        session = ConversationSession.objects.create(user=request.user, contact=contact)
+        return Response({
+            "session_id": session.id,
+            "contact_id": contact.id if contact else None,
+            "contact_name": contact.name if contact else None,
+        }, status=201)

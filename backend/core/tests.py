@@ -267,3 +267,70 @@ class StripMarkdownFenceTests(APITestCase):
     def test_leaves_plain_json_alone(self):
         from core.memory_agent import _strip_markdown_fence
         self.assertEqual(_strip_markdown_fence('{"a": 1}'), '{"a": 1}')
+
+class ContactCrudTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="cruduser", password="testpass123")
+        self.other_user = User.objects.create_user(username="crudother", password="testpass123")
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    def test_list_only_returns_own_contacts(self):
+        Contact.objects.create(user=self.user, name="Sara")
+        Contact.objects.create(user=self.other_user, name="NotMine")
+
+        response = self.client.get("/api/contacts/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], "Sara")
+
+    def test_create_contact(self):
+        response = self.client.post("/api/contacts/", {"name": "Ahmed"}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(Contact.objects.filter(user=self.user, name="Ahmed").exists())
+
+    def test_create_warns_on_duplicate(self):
+        Contact.objects.create(user=self.user, name="Ahmed")
+
+        response = self.client.post("/api/contacts/", {"name": "ahmed"}, format="json")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(Contact.objects.filter(user=self.user).count(), 1)
+
+    def test_cannot_delete_another_users_contact(self):
+        other = Contact.objects.create(user=self.other_user, name="NotMine")
+
+        response = self.client.delete(f"/api/contacts/{other.id}/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Contact.objects.filter(id=other.id).exists())
+
+
+class SessionCreateTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sessuser", password="testpass123")
+        self.contact = Contact.objects.create(user=self.user, name="Sara")
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    def test_create_session_with_contact(self):
+        response = self.client.post("/api/sessions/", {"contact_id": self.contact.id}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["contact_name"], "Sara")
+
+    def test_create_session_without_contact_is_allowed(self):
+        response = self.client.post("/api/sessions/", {}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.data["contact_id"])
+
+    def test_cannot_start_session_with_another_users_contact(self):
+        other_user = User.objects.create_user(username="sessother", password="testpass123")
+        other_contact = Contact.objects.create(user=other_user, name="NotMine")
+
+        response = self.client.post("/api/sessions/", {"contact_id": other_contact.id}, format="json")
+
+        self.assertEqual(response.status_code, 404)
