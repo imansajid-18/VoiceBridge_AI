@@ -7,8 +7,21 @@ from .agent import run_suggestion_agent
 from django.utils import timezone
 from .models import Contact, ConversationSession, Message, SuggestionLog, MemoryEntry
 from .memory_agent import run_memory_agent, save_memory_facts
+from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.contrib.auth.password_validation import validate_password
+
 
 FALLBACK_REPLIES = ["Yes", "No", "Can you repeat that?"]
+
+def _validate_suggestion_result(result):
+    if not isinstance(result, dict):
+        return False
+    replies, setting = result.get("replies"), result.get("setting")
+    if not isinstance(replies, list) or not replies or not all(isinstance(r, str) for r in replies):
+        return False
+    return isinstance(setting, str)
 
 
 class SuggestView(APIView):
@@ -32,8 +45,10 @@ class SuggestView(APIView):
                 user_id=request.user.id,
                 contact_id=session.contact_id,
             )
+            if not _validate_suggestion_result(result):
+                raise ValueError(f"Unexpected suggestion shape: {result!r}")
             is_fallback = False
-        except (groq.APIError, json.JSONDecodeError) as e:
+        except (groq.APIError, json.JSONDecodeError, ValueError) as e:
             print(f"[SuggestView] Falling back — {type(e).__name__}: {e}")
             result = {"replies": FALLBACK_REPLIES, "setting": "general"}
             is_fallback = True
@@ -135,8 +150,12 @@ class SaveAsContactView(APIView):
         session.ended_at = timezone.now()
         session.save()
 
-        facts = run_memory_agent(session.id)
-        save_memory_facts(session, facts)
+        try:
+            facts = run_memory_agent(session.id)
+            save_memory_facts(session, facts)
+        except Exception as e:
+            print(f"[SaveAsContact] Memory extraction failed — {type(e).__name__}: {e}")
+            facts = {"general_facts": [], "contact_facts": []}
 
         return Response({"status": "saved", "contact_id": contact.id, "saved_facts": facts})
 
@@ -259,3 +278,46 @@ class SessionCreateView(APIView):
             "contact_id": contact.id if contact else None,
             "contact_name": contact.name if contact else None,
         }, status=201)
+
+class RegisterView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        password = request.data.get("password") or ""
+
+        if not username or not password:
+            return Response(
+                {"error": "Username and password are required"},
+                status=400
+            )
+
+        if User.objects.filter(username__iexact=username).exists():
+            return Response(
+                {"error": "That username is already taken"},
+                status=409
+            )
+
+        try:
+            validate_password(password)
+        except DjangoValidationError as e:
+            return Response(
+                {"error": " ".join(e.messages)},
+                status=400
+            )
+        
+        user = User.objects.create_user(
+            username=username,
+            password=password
+        )
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "username": user.username,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=201
+        )

@@ -44,17 +44,24 @@ def _extract_json(response, model_name):
     return json.loads(_strip_markdown_fence(content))
 
 
-def run_memory_agent(session_id):
-    partner_messages = Message.objects.filter(session_id=session_id).order_by("timestamp")
-    selected_replies = (
-        SuggestionLog.objects.filter(session_id=session_id, suggestion_selected__isnull=False)
-        .order_by("timestamp")
-        .values_list("suggestion_selected", flat=True)
-    )
+def _build_conversation_text(session_id):
+    messages = Message.objects.filter(session_id=session_id).order_by("timestamp")
+    logs = SuggestionLog.objects.filter(
+        session_id=session_id, suggestion_selected__isnull=False
+    ).values("message_id", "suggestion_selected")
+    replies_by_message = {l["message_id"]: l["suggestion_selected"] for l in logs}
 
-    lines = [f"Partner said: {m.text}" for m in partner_messages]
-    lines += [f"User replied: {r}" for r in selected_replies]
-    conversation_text = "\n".join(lines)
+    lines = []
+    for m in messages:
+        lines.append(f"Partner said: {m.text}")
+        reply = replies_by_message.get(m.id)
+        if reply:
+            lines.append(f"User replied: {reply}")
+    return "\n".join(lines)
+
+
+def run_memory_agent(session_id):
+    conversation_text = _build_conversation_text(session_id)
 
     if not conversation_text.strip():
         return {"general_facts": [], "contact_facts": []}

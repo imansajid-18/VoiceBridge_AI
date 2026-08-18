@@ -14,17 +14,25 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "lookup_profile",
-            "description": "Get known facts about the current user's speaking style and, if talking to a saved contact, facts about that specific contact.",
+            "description": (
+                "Get known facts about the current user's speaking style "
+                "and, if talking to a saved contact, facts about that contact."
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "contact_id": {"type": "integer"},
-                },
+                "properties": {},
                 "required": [],
             },
         },
     }
 ]
+
+def _extract_json(response, model_name):
+    choice = response.choices[0]
+    content = choice.message.content
+    if not content or not content.strip():
+        raise ValueError(f"{model_name} returned empty content (finish_reason={choice.finish_reason})")
+    return json.loads(content)
 
 
 def run_suggestion_agent(transcript, user_id, contact_id=None):
@@ -46,6 +54,7 @@ def run_suggestion_agent(transcript, user_id, contact_id=None):
         messages=messages,
         tools=TOOLS,
         tool_choice="auto",
+        reasoning_effort="low",
         timeout=3,
     )
 
@@ -54,9 +63,10 @@ def run_suggestion_agent(transcript, user_id, contact_id=None):
     if message.tool_calls:
         messages.append(message)
         for tool_call in message.tool_calls:
-            args = json.loads(tool_call.function.arguments)
-            result = lookup_profile(user_id=user_id, contact_id=args.get("contact_id", contact_id))
-
+            result = lookup_profile(
+            user_id=user_id,
+            contact_id=contact_id
+            )
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -66,8 +76,9 @@ def run_suggestion_agent(transcript, user_id, contact_id=None):
         second_response = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=messages,
+            reasoning_effort="low",
             timeout=3,
         )
-        return json.loads(second_response.choices[0].message.content)
+        return _extract_json(second_response, "openai/gpt-oss-20b")
 
-    return json.loads(message.content)
+    return _extract_json(response, "openai/gpt-oss-20b")
