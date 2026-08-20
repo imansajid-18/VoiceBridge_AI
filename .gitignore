@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 venv/
 node_modules/
+dist/
 db.sqlite3
 *.log
 .coverage
