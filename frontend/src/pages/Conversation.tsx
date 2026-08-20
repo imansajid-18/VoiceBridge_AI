@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation,useNavigate } from 'react-router-dom'
 import { Mic, Send, MoreVertical, Pencil, Check } from 'lucide-react'
 import { useApiClient } from '../api/client'
 
@@ -26,6 +26,7 @@ function Conversation() {
   const location = useLocation()
   const state = location.state as { sessionId?: number; contactName?: string | null } | null
   const apiFetch = useApiClient()
+  const navigate = useNavigate()
 
   const [isListening, setIsListening] = useState(false)
   const [interimText, setInterimText] = useState('')
@@ -265,7 +266,17 @@ function Conversation() {
           </div>
         </div>
 
-        <button className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70">
+        <button
+          onClick={async () => {
+            stopListening()
+            if (!state?.sessionId) return
+            const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
+            if (!response.ok) return
+            const data = await response.json()
+            navigate(data.status === 'pending_decision' ? `/sessions/${state.sessionId}/decide` : '/contacts')
+          }}
+          className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70"
+        >
           End conversation
         </button>
       </div>

@@ -6,6 +6,7 @@ import Conversation from './pages/Conversation'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewConversation from './pages/NewConversation'
 import DeleteContact from './pages/DeleteContact'
+import SessionDecision from './pages/SessionDecision'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/contacts" element={<Contacts />} />
         <Route path="/conversation" element={<Conversation />} />
         <Route path="/contacts/new" element={<NewConversation />} />
+        <Route path="/sessions/:id/decide" element={<SessionDecision />} />
       </Route>
     </Routes>
   )
