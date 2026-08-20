@@ -53,11 +53,8 @@ function SessionSummary() {
           </div>
         )}
 
-        <button onClick={() => navigate('/contacts')} className="w-full bg-gradient-to-r from-blue to-violet text-white font-bold py-3.5 rounded-full mb-2">
+        <button onClick={() => navigate('/contacts')} className="w-full bg-gradient-to-r from-blue to-violet text-white font-bold py-3.5 rounded-full">
           Done
-        </button>
-        <button onClick={() => navigate('/memory')} className="text-xs text-white/50 hover:text-white">
-          View all memory
         </button>
       </div>
     </div>

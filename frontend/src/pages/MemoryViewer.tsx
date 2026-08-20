@@ -39,6 +39,11 @@ function MemoryViewer() {
     loadMemory()
   }
 
+  async function forgetGeneral() {
+    await apiFetch('/memory/general/', { method: 'DELETE' })
+    loadMemory()
+  }
+
   const scopedContact = contactId
     ? memory?.contacts.find((c) => c.contact_id === Number(contactId))
     : null
@@ -56,7 +61,7 @@ function MemoryViewer() {
         </button>
 
         <h1 className="text-2xl font-extrabold tracking-tight mb-1">
-          {contactId ? `What I've learned about ${scopedName ?? '…'}` : "What I've learned"}
+          {contactId ? `What I've learned about ${scopedName ?? '…'}` : "What I've learned about you"}
         </h1>
         <p className="text-sm text-white/55 mb-6">Visible and deletable, always</p>
 
@@ -93,7 +98,6 @@ function MemoryViewer() {
         {memory && !contactId && (
           <div className="space-y-4">
             <div className="bg-white/10 border border-white/10 rounded-2xl p-4">
-              <p className="text-xs font-extrabold text-blue uppercase tracking-wide mb-2">About you</p>
               {memory.general_facts.length === 0 && (
                 <p className="text-white/40 text-sm py-1">Nothing learned yet.</p>
               )}
@@ -106,32 +110,14 @@ function MemoryViewer() {
                 </div>
               ))}
             </div>
-
-            {memory.contacts.map((contact) => (
-              <div key={contact.contact_id} className="bg-white/10 border border-white/10 rounded-2xl p-4">
-                <p className="text-xs font-extrabold text-blue uppercase tracking-wide mb-2">{contact.contact_name}</p>
-                {contact.facts.map((fact, i) => (
-                  <div key={fact.id} className={`flex justify-between items-center py-2 ${i > 0 ? 'border-t border-white/10' : ''}`}>
-                    <span className="text-sm">{fact.fact}</span>
-                    <button onClick={() => deleteFact(fact.id)} className="text-white/40 hover:text-warn p-1">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => forgetContact(contact.contact_id)}
-                  className="flex items-center justify-center gap-2 w-full bg-coral/10 border border-coral/25 text-coral font-bold text-xs rounded-full py-2.5 mt-3"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Forget everything about {contact.contact_name}
-                </button>
-              </div>
-            ))}
-
-            {memory.contacts.length === 0 && memory.general_facts.length === 0 && (
-              <p className="text-white/40 text-sm text-center py-4">
-                Nothing learned yet — talk to a saved contact and it'll start appearing here.
-              </p>
+            {memory.general_facts.length > 0 && (
+              <button
+                onClick={forgetGeneral}
+                className="flex items-center justify-center gap-2 w-full bg-coral/10 border border-coral/25 text-coral font-bold text-xs rounded-full py-2.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Forget everything about you
+              </button>
             )}
           </div>
         )}

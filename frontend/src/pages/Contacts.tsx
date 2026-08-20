@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, MoreVertical, Plus } from 'lucide-react'
+import { Search, MoreVertical, Plus , Brain } from 'lucide-react'
 import { useApiClient } from '../api/client'
 import type { Contact } from '../types/contact'
 
@@ -64,7 +64,16 @@ function Contacts() {
         className="relative w-full max-w-lg rounded-[36px] p-10 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] border border-white/10 z-10"
         style={{ background: 'radial-gradient(130% 90% at 50% -15%, var(--color-stage-deep), var(--color-stage) 60%)' }}
       >
-        <h1 className="text-2xl font-extrabold tracking-tight mb-1">Who's this with?</h1>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-2xl font-extrabold tracking-tight">Who's this with?</h1>
+          <button
+            onClick={() => navigate('/memory')}
+            className="text-white/50 hover:text-white p-2 rounded-full hover:bg-white/5"
+            title="View your memory"
+          >
+            <Brain className="w-5 h-5" />
+          </button>
+        </div>
         <p className="text-sm text-white/55 mb-6">Pick a contact, or start fresh</p>
 
         <div className="relative mb-6">

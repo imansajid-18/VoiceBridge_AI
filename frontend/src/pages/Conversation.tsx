@@ -30,6 +30,7 @@ function Conversation() {
 
   const [isListening, setIsListening] = useState(false)
   const [interimText, setInterimText] = useState('')
+  const [isEnding, setIsEnding] = useState(false)
   const [lastHeard, setLastHeard] = useState<string | null>(null)
   const [speechError, setSpeechError] = useState<string | null>(null)
   const recognitionRef = useRef<AppSpeechRecognition | null>(null)
@@ -268,22 +269,28 @@ function Conversation() {
 
         <button
           onClick={async () => {
+            if (isEnding || !state?.sessionId) return
+            setIsEnding(true)
             stopListening()
-            if (!state?.sessionId) return
-            const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
-            if (!response.ok) return
-                        const data = await response.json()
-            if (data.status === 'pending_decision') {
-            navigate(`/sessions/${state.sessionId}/decide`)
-            } else {
-              navigate(`/sessions/${state.sessionId}/summary`, {
-                state: { contactName: state.contactName, savedFacts: data.saved_facts },
-              })
+            try {
+              const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
+              if (!response.ok) return
+              const data = await response.json()
+              if (data.status === 'pending_decision') {
+                navigate(`/sessions/${state.sessionId}/decide`)
+              } else {
+                navigate(`/sessions/${state.sessionId}/summary`, {
+                  state: { contactName: state.contactName, savedFacts: data.saved_facts },
+                })
+              }
+            } finally {
+              setIsEnding(false)
             }
           }}
-          className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70"
+          disabled={isEnding}
+          className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70 disabled:opacity-40"
         >
-          End conversation
+          {isEnding ? (state?.contactName ? 'Saving what I learned…' : 'Ending…') : 'End conversation'}
         </button>
       </div>
     </div>
