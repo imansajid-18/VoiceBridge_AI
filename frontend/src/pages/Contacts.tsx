@@ -119,8 +119,11 @@ function Contacts() {
                   className="absolute right-4 top-[54px] bg-[#1F183D] border border-white/15 rounded-[18px] p-2.5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] z-50 w-[180px]"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button className="w-full text-left py-2 px-2.5 text-[13px] font-extrabold text-white/50 rounded-[10px] cursor-not-allowed">
-                    View {contact.name}'s memory <span className="text-[10px]">(soon)</span>
+                  <button
+                    onClick={() => navigate(`/memory/${contact.id}`, { state: { contactName: contact.name } })}
+                    className="w-full text-left py-2 px-2.5 text-[13px] font-extrabold text-white rounded-[10px] hover:bg-white/10"
+                  >
+                    View memory
                   </button>
                   <button
                     onClick={() => navigate(`/contacts/${contact.id}/delete`)}

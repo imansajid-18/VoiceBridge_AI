@@ -272,8 +272,14 @@ function Conversation() {
             if (!state?.sessionId) return
             const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
             if (!response.ok) return
-            const data = await response.json()
-            navigate(data.status === 'pending_decision' ? `/sessions/${state.sessionId}/decide` : '/contacts')
+                        const data = await response.json()
+            if (data.status === 'pending_decision') {
+            navigate(`/sessions/${state.sessionId}/decide`)
+            } else {
+              navigate(`/sessions/${state.sessionId}/summary`, {
+                state: { contactName: state.contactName, savedFacts: data.saved_facts },
+              })
+            }
           }}
           className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70"
         >
