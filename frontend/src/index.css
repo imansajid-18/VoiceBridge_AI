@@ -9,3 +9,8 @@
   --color-amber: #FFB84D;
   --color-warn: #FF6B6B;
 }
+@keyframes micGlow {
+  0%, 100% { box-shadow: 0 0 0 10px rgba(59,130,246,0.18), 0 0 50px rgba(59,130,246,0.65), 0 10px 20px -6px rgba(0,0,0,0.4); }
+  50% { box-shadow: 0 0 0 15px rgba(59,130,246,0.3), 0 0 70px rgba(59,130,246,0.9), 0 10px 20px -6px rgba(0,0,0,0.4); }
+}
+.mic-glow { animation: micGlow 2.4s ease-in-out infinite; }
