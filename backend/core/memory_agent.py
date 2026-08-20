@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import openai
 from openai import OpenAI
-from .models import Message, SuggestionLog, MemoryEntry,ConversationSession
+from .models import Message, SuggestionLog, MemoryEntry, ConversationSession
 
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -54,7 +54,9 @@ def _extract_json(response, model_name):
     choice = response.choices[0]
     content = choice.message.content
     if not content or not content.strip():
-        raise ValueError(f"{model_name} returned empty content (finish_reason={choice.finish_reason})")
+        raise ValueError(
+            f"{model_name} returned empty content (finish_reason={choice.finish_reason})"
+        )
     return json.loads(_strip_markdown_fence(content))
 
 
@@ -66,7 +68,7 @@ def _build_conversation_text(session_id):
     logs = SuggestionLog.objects.filter(
         session_id=session_id, suggestion_selected__isnull=False
     ).values("message_id", "suggestion_selected")
-    replies_by_message = {l["message_id"]: l["suggestion_selected"] for l in logs}
+    replies_by_message = {log["message_id"]: log["suggestion_selected"] for log in logs}
 
     lines = []
     for m in messages:
@@ -76,6 +78,7 @@ def _build_conversation_text(session_id):
             lines.append(f"User replied: {reply}")
     return "\n".join(lines)
 
+
 def _existing_facts_context(session):
     general = list(
         MemoryEntry.objects.filter(user=session.user, contact=None).values_list("fact", flat=True)
@@ -83,8 +86,9 @@ def _existing_facts_context(session):
     contact_facts = []
     if session.contact_id:
         contact_facts = list(
-            MemoryEntry.objects.filter(user=session.user, contact_id=session.contact_id)
-            .values_list("fact", flat=True)
+            MemoryEntry.objects.filter(
+                user=session.user, contact_id=session.contact_id
+            ).values_list("fact", flat=True)
         )
 
     if not general and not contact_facts:
@@ -98,6 +102,7 @@ def _existing_facts_context(session):
         lines.append(f"About {session.contact.name}:")
         lines += [f"- {f}" for f in contact_facts]
     return "\n".join(lines) + "\n\n"
+
 
 def run_memory_agent(session_id):
     conversation_text = _build_conversation_text(session_id)
@@ -115,13 +120,21 @@ def run_memory_agent(session_id):
 
     try:
         response = client.chat.completions.create(
-            model="gemini-3.6-flash", messages=messages, timeout=6, max_completion_tokens=1024,
+            model="gemini-3.6-flash",
+            messages=messages,
+            timeout=6,
+            max_completion_tokens=1024,
         )
         return _extract_json(response, "gemini-3.6-flash")
     except (openai.RateLimitError, openai.NotFoundError, ValueError, json.JSONDecodeError) as e:
-        print(f"[MemoryAgent] gemini-3.6-flash failed ({type(e).__name__}: {e}), falling back to gemini-3.5-flash-lite")
+        print(
+            f"[MemoryAgent] gemini-3.6-flash failed ({type(e).__name__}: {e}), falling back to gemini-3.5-flash-lite"
+        )
         response = client.chat.completions.create(
-            model="gemini-3.5-flash-lite", messages=messages, timeout=10, max_completion_tokens=1024,
+            model="gemini-3.5-flash-lite",
+            messages=messages,
+            timeout=10,
+            max_completion_tokens=1024,
         )
         return _extract_json(response, "gemini-3.5-flash-lite")
 
@@ -137,7 +150,9 @@ def save_memory_facts(session, facts):
 
     for fact in facts.get("general_facts", []):
         entry, was_created = MemoryEntry.objects.get_or_create(
-            user=session.user, contact=None, fact=fact,
+            user=session.user,
+            contact=None,
+            fact=fact,
         )
         if was_created:
             created.append(entry)
@@ -145,7 +160,9 @@ def save_memory_facts(session, facts):
     if session.contact_id:
         for fact in facts.get("contact_facts", []):
             entry, was_created = MemoryEntry.objects.get_or_create(
-                user=session.user, contact_id=session.contact_id, fact=fact,
+                user=session.user,
+                contact_id=session.contact_id,
+                fact=fact,
             )
             if was_created:
                 created.append(entry)

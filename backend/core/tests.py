@@ -48,7 +48,9 @@ class SuggestViewTests(APITestCase):
     def test_suggest_falls_back_on_valid_json_wrong_keys(self, mock_agent):
         mock_agent.return_value = {"answers": ["Yes"], "context": "general"}
         response = self.client.post(
-            f"/api/sessions/{self.session.id}/suggest/", {"transcript": "Are you free later?"}, format="json",
+            f"/api/sessions/{self.session.id}/suggest/",
+            {"transcript": "Are you free later?"},
+            format="json",
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["fallback"])
@@ -57,7 +59,9 @@ class SuggestViewTests(APITestCase):
     def test_suggest_falls_back_when_fewer_than_three_replies(self, mock_agent):
         mock_agent.return_value = {"replies": ["Yes", "No"], "setting": "general"}
         response = self.client.post(
-            f"/api/sessions/{self.session.id}/suggest/", {"transcript": "Hi"}, format="json",
+            f"/api/sessions/{self.session.id}/suggest/",
+            {"transcript": "Hi"},
+            format="json",
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["fallback"])
@@ -123,7 +127,11 @@ class SelectSuggestionViewTests(APITestCase):
     def test_select_accepts_custom_text_with_flag(self):
         response = self.client.post(
             f"/api/sessions/{self.session.id}/select/",
-            {"suggestion_log_id": self.log.id, "selected": "Something totally different", "is_custom": True},
+            {
+                "suggestion_log_id": self.log.id,
+                "selected": "Something totally different",
+                "is_custom": True,
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 200)
@@ -145,6 +153,7 @@ class LookupProfileTests(APITestCase):
 
     def test_returns_general_and_contact_facts(self):
         from core.tools import lookup_profile
+
         MemoryEntry.objects.create(user=self.user, contact=None, fact="Says In Sha Allah")
         MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Likes coffee")
 
@@ -155,6 +164,7 @@ class LookupProfileTests(APITestCase):
 
     def test_excludes_other_users_facts(self):
         from core.tools import lookup_profile
+
         MemoryEntry.objects.create(user=self.other_user, contact=None, fact="Not yours")
 
         facts = lookup_profile(user_id=self.user.id)
@@ -172,7 +182,10 @@ class EndSessionViewTests(APITestCase):
     @patch("core.views.save_memory_facts")
     @patch("core.views.run_memory_agent")
     def test_known_contact_extracts_and_saves(self, mock_agent, mock_save):
-        mock_agent.return_value = {"general_facts": ["Says In Sha Allah"], "contact_facts": ["Likes coffee"]}
+        mock_agent.return_value = {
+            "general_facts": ["Says In Sha Allah"],
+            "contact_facts": ["Likes coffee"],
+        }
         session = ConversationSession.objects.create(user=self.user, contact=self.contact)
 
         response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
@@ -198,7 +211,9 @@ class EndSessionViewTests(APITestCase):
         self.assertEqual(session.status, "pending_decision")
 
     def test_cannot_end_an_already_ended_session(self):
-        session = ConversationSession.objects.create(user=self.user, contact=self.contact, status="ended")
+        session = ConversationSession.objects.create(
+            user=self.user, contact=self.contact, status="ended"
+        )
         response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
         self.assertEqual(response.status_code, 400)
 
@@ -207,9 +222,13 @@ class SaveDiscardTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="sduser", password="testpass123")
         self.session = ConversationSession.objects.create(
-            user=self.user, contact=None, status="pending_decision",
+            user=self.user,
+            contact=None,
+            status="pending_decision",
         )
-        self.message = Message.objects.create(session=self.session, speaker="partner", text="Nice to meet you")
+        self.message = Message.objects.create(
+            session=self.session, speaker="partner", text="Nice to meet you"
+        )
         token = RefreshToken.for_user(self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
 
@@ -219,7 +238,9 @@ class SaveDiscardTests(APITestCase):
         mock_agent.return_value = {"general_facts": [], "contact_facts": ["Met at a cafe"]}
 
         response = self.client.post(
-            f"/api/sessions/{self.session.id}/save-contact/", {"name": "Ahmed"}, format="json",
+            f"/api/sessions/{self.session.id}/save-contact/",
+            {"name": "Ahmed"},
+            format="json",
         )
 
         self.assertEqual(response.status_code, 200)
@@ -233,7 +254,9 @@ class SaveDiscardTests(APITestCase):
         Contact.objects.create(user=self.user, name="Ahmed")
 
         response = self.client.post(
-            f"/api/sessions/{self.session.id}/save-contact/", {"name": "ahmed"}, format="json",
+            f"/api/sessions/{self.session.id}/save-contact/",
+            {"name": "ahmed"},
+            format="json",
         )
 
         self.assertEqual(response.status_code, 409)
@@ -244,7 +267,9 @@ class SaveDiscardTests(APITestCase):
     def test_save_survives_memory_agent_crash(self, mock_agent):
         mock_agent.side_effect = Exception("Gemini totally down")
         response = self.client.post(
-            f"/api/sessions/{self.session.id}/save-contact/", {"name": "Ahmed"}, format="json",
+            f"/api/sessions/{self.session.id}/save-contact/",
+            {"name": "Ahmed"},
+            format="json",
         )
         self.assertEqual(response.status_code, 200)
         self.session.refresh_from_db()
@@ -268,9 +293,15 @@ class MemoryViewerTests(APITestCase):
         self.other_user = User.objects.create_user(username="memother", password="testpass123")
         self.contact = Contact.objects.create(user=self.user, name="Sara")
 
-        self.general = MemoryEntry.objects.create(user=self.user, contact=None, fact="Says In Sha Allah")
-        self.contact_fact = MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Likes coffee")
-        self.other_fact = MemoryEntry.objects.create(user=self.other_user, contact=None, fact="Not yours")
+        self.general = MemoryEntry.objects.create(
+            user=self.user, contact=None, fact="Says In Sha Allah"
+        )
+        self.contact_fact = MemoryEntry.objects.create(
+            user=self.user, contact=self.contact, fact="Likes coffee"
+        )
+        self.other_fact = MemoryEntry.objects.create(
+            user=self.other_user, contact=None, fact="Not yours"
+        )
 
         token = RefreshToken.for_user(self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
@@ -297,7 +328,9 @@ class MemoryViewerTests(APITestCase):
         self.assertFalse(MemoryEntry.objects.filter(id=self.general.id).exists())
 
     def test_delete_all_memory_for_a_contact(self):
-        MemoryEntry.objects.create(user=self.user, contact=self.contact, fact="Studies at university")
+        MemoryEntry.objects.create(
+            user=self.user, contact=self.contact, fact="Studies at university"
+        )
 
         response = self.client.delete(f"/api/memory/contact/{self.contact.id}/")
 
@@ -316,10 +349,12 @@ class MemoryViewerTests(APITestCase):
 class StripMarkdownFenceTests(APITestCase):
     def test_strips_json_fence(self):
         from core.memory_agent import _strip_markdown_fence
+
         self.assertEqual(_strip_markdown_fence('```json\n{"a": 1}\n```'), '{"a": 1}')
 
     def test_leaves_plain_json_alone(self):
         from core.memory_agent import _strip_markdown_fence
+
         self.assertEqual(_strip_markdown_fence('{"a": 1}'), '{"a": 1}')
 
 
@@ -371,7 +406,9 @@ class SessionCreateTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
 
     def test_create_session_with_contact(self):
-        response = self.client.post("/api/sessions/", {"contact_id": self.contact.id}, format="json")
+        response = self.client.post(
+            "/api/sessions/", {"contact_id": self.contact.id}, format="json"
+        )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["contact_name"], "Sara")
@@ -386,7 +423,9 @@ class SessionCreateTests(APITestCase):
         other_user = User.objects.create_user(username="sessother", password="testpass123")
         other_contact = Contact.objects.create(user=other_user, name="NotMine")
 
-        response = self.client.post("/api/sessions/", {"contact_id": other_contact.id}, format="json")
+        response = self.client.post(
+            "/api/sessions/", {"contact_id": other_contact.id}, format="json"
+        )
 
         self.assertEqual(response.status_code, 404)
 
@@ -394,13 +433,18 @@ class SessionCreateTests(APITestCase):
 class BuildConversationTextTests(APITestCase):
     def test_interleaves_in_actual_order_with_named_contact(self):
         from core.memory_agent import _build_conversation_text
+
         user = User.objects.create_user(username="ordertest", password="testpass123")
         contact = Contact.objects.create(user=user, name="Ali")
         session = ConversationSession.objects.create(user=user, contact=contact)
         m1 = Message.objects.create(session=session, speaker="partner", text="First")
-        SuggestionLog.objects.create(session=session, message=m1, suggestions_shown=["A"], suggestion_selected="Reply1")
+        SuggestionLog.objects.create(
+            session=session, message=m1, suggestions_shown=["A"], suggestion_selected="Reply1"
+        )
         m2 = Message.objects.create(session=session, speaker="partner", text="Second")
-        SuggestionLog.objects.create(session=session, message=m2, suggestions_shown=["B"], suggestion_selected="Reply2")
+        SuggestionLog.objects.create(
+            session=session, message=m2, suggestions_shown=["B"], suggestion_selected="Reply2"
+        )
 
         text = _build_conversation_text(session.id)
         self.assertEqual(
@@ -410,9 +454,10 @@ class BuildConversationTextTests(APITestCase):
 
     def test_uses_generic_label_for_stranger_session(self):
         from core.memory_agent import _build_conversation_text
+
         user = User.objects.create_user(username="strangertest", password="testpass123")
         session = ConversationSession.objects.create(user=user, contact=None)
-        m1 = Message.objects.create(session=session, speaker="partner", text="Hello")
+        Message.objects.create(session=session, speaker="partner", text="Hello")
 
         text = _build_conversation_text(session.id)
         self.assertEqual(text, "the other person said: Hello")
@@ -437,6 +482,7 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
+
         result = run_suggestion_agent("Hi", user_id=1, contact_id=5)
 
         self.assertEqual(result["replies"], ["Real personalized reply"])
@@ -458,32 +504,53 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
+
         run_suggestion_agent("Hi", user_id=1, contact_id=None)
 
         mock_lookup.assert_not_called()
 
+
 class RecentHistoryMessagesTests(APITestCase):
     def test_includes_recent_exchanges_excluding_current_message(self):
         from core.agent import _recent_history_messages
+
         user = User.objects.create_user(username="histuser", password="testpass123")
         session = ConversationSession.objects.create(user=user)
 
-        m1 = Message.objects.create(session=session, speaker="partner", text="Are you free for coffee?")
-        SuggestionLog.objects.create(session=session, message=m1, suggestions_shown=["Sure"], suggestion_selected="Sure, what time?")
+        m1=Message.objects.create(
+            session=session, speaker="partner", text="Are you free for coffee?"
+        )
+        SuggestionLog.objects.create(
+            session=session,
+            message=m1,
+            suggestions_shown=["Sure"],
+            suggestion_selected="Sure, what time?",
+        )
         m2 = Message.objects.create(session=session, speaker="partner", text="How about 5pm?")
-        SuggestionLog.objects.create(session=session, message=m2, suggestions_shown=["Works"], suggestion_selected="Works for me!")
+        SuggestionLog.objects.create(
+            session=session,
+            message=m2,
+            suggestions_shown=["Works"],
+            suggestion_selected="Works for me!",
+        )
         Message.objects.create(session=session, speaker="partner", text="Great, see you then")
 
         history = _recent_history_messages(session.id, limit=6)
 
-        self.assertEqual(history[0], {"role": "user", "content": 'The other person said: "Are you free for coffee?"'})
+        self.assertEqual(
+            history[0],
+            {"role": "user", "content": 'The other person said: "Are you free for coffee?"'},
+        )
         self.assertEqual(history[1], {"role": "assistant", "content": "Sure, what time?"})
-        self.assertEqual(history[2], {"role": "user", "content": 'The other person said: "How about 5pm?"'})
+        self.assertEqual(
+            history[2], {"role": "user", "content": 'The other person said: "How about 5pm?"'}
+        )
         self.assertEqual(history[3], {"role": "assistant", "content": "Works for me!"})
         self.assertEqual(len(history), 4)
 
     def test_respects_limit(self):
         from core.agent import _recent_history_messages
+
         user = User.objects.create_user(username="histuser2", password="testpass123")
         session = ConversationSession.objects.create(user=user)
         for i in range(10):

@@ -59,16 +59,19 @@ SUGGESTION_SCHEMA = {
     },
 }
 
+
 def _recent_history_messages(session_id, limit=6):
     from .models import Message, SuggestionLog
 
-    recent = list(Message.objects.filter(session_id=session_id).order_by("-timestamp")[1:limit + 1])
+    recent = list(
+        Message.objects.filter(session_id=session_id).order_by("-timestamp")[1 : limit + 1]
+    )
     recent.reverse()
 
     logs = SuggestionLog.objects.filter(
         session_id=session_id, suggestion_selected__isnull=False
     ).values("message_id", "suggestion_selected")
-    replies_by_message = {l["message_id"]: l["suggestion_selected"] for l in logs}
+    replies_by_message = {log["message_id"]: log["suggestion_selected"] for log in logs}
 
     history = []
     for m in recent:
@@ -77,6 +80,7 @@ def _recent_history_messages(session_id, limit=6):
         if reply:
             history.append({"role": "assistant", "content": reply})
     return history
+
 
 def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
     partner_line = f'The other person just said: "{transcript}"'
@@ -108,6 +112,7 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
         profile_context = f"Known facts to use if relevant: {json.dumps(result)}\n\n"
 
     history = _recent_history_messages(session_id, limit=4) if session_id else []
+
     def call_reply(temperature):
         return client.chat.completions.create(
             model="openai/gpt-oss-20b",
