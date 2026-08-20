@@ -4,7 +4,7 @@ from .views import (
     SaveAsContactView, DiscardSessionView,
     MemoryListView, MemoryEntryDeleteView, ContactMemoryDeleteView,
     ContactListCreateView, ContactDeleteView, SessionCreateView,
-    RegisterView,
+    RegisterView,GeneralMemoryDeleteView,
 )
 
 urlpatterns = [
@@ -20,4 +20,5 @@ urlpatterns = [
     path('memory/<int:entry_id>/', MemoryEntryDeleteView.as_view(), name='memory_entry_delete'),
     path('memory/contact/<int:contact_id>/', ContactMemoryDeleteView.as_view(), name='contact_memory_delete'),
     path("register/", RegisterView.as_view(), name="register"),
+    path('memory/general/', GeneralMemoryDeleteView.as_view(), name='general_memory_delete'),
 ]

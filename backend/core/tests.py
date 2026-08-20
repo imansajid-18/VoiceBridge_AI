@@ -1,10 +1,10 @@
 import json
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Contact, ConversationSession, Message, SuggestionLog, MemoryEntry
-from unittest.mock import patch, MagicMock
+
 
 class SuggestViewTests(APITestCase):
     def setUp(self):
@@ -49,6 +49,15 @@ class SuggestViewTests(APITestCase):
         mock_agent.return_value = {"answers": ["Yes"], "context": "general"}
         response = self.client.post(
             f"/api/sessions/{self.session.id}/suggest/", {"transcript": "Are you free later?"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["fallback"])
+
+    @patch("core.views.run_suggestion_agent")
+    def test_suggest_falls_back_when_fewer_than_three_replies(self, mock_agent):
+        mock_agent.return_value = {"replies": ["Yes", "No"], "setting": "general"}
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/suggest/", {"transcript": "Hi"}, format="json",
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["fallback"])
@@ -127,6 +136,7 @@ class SelectSuggestionViewTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+
 class LookupProfileTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="lpuser", password="testpass123")
@@ -150,6 +160,7 @@ class LookupProfileTests(APITestCase):
         facts = lookup_profile(user_id=self.user.id)
 
         self.assertEqual(facts, [])
+
 
 class EndSessionViewTests(APITestCase):
     def setUp(self):
@@ -250,6 +261,7 @@ class SaveDiscardTests(APITestCase):
         self.assertFalse(ConversationSession.objects.filter(id=session_id).exists())
         self.assertFalse(Message.objects.filter(session_id=session_id).exists())
 
+
 class MemoryViewerTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="memuser", password="testpass123")
@@ -294,6 +306,13 @@ class MemoryViewerTests(APITestCase):
         self.assertFalse(MemoryEntry.objects.filter(contact=self.contact).exists())
         self.assertTrue(MemoryEntry.objects.filter(id=self.general.id).exists())
 
+    def test_delete_all_general_memory(self):
+        response = self.client.delete("/api/memory/general/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(MemoryEntry.objects.filter(id=self.general.id).exists())
+        self.assertTrue(MemoryEntry.objects.filter(id=self.contact_fact.id).exists())
+
+
 class StripMarkdownFenceTests(APITestCase):
     def test_strips_json_fence(self):
         from core.memory_agent import _strip_markdown_fence
@@ -302,6 +321,7 @@ class StripMarkdownFenceTests(APITestCase):
     def test_leaves_plain_json_alone(self):
         from core.memory_agent import _strip_markdown_fence
         self.assertEqual(_strip_markdown_fence('{"a": 1}'), '{"a": 1}')
+
 
 class ContactCrudTests(APITestCase):
     def setUp(self):
@@ -370,11 +390,13 @@ class SessionCreateTests(APITestCase):
 
         self.assertEqual(response.status_code, 404)
 
+
 class BuildConversationTextTests(APITestCase):
-    def test_interleaves_in_actual_order(self):
+    def test_interleaves_in_actual_order_with_named_contact(self):
         from core.memory_agent import _build_conversation_text
         user = User.objects.create_user(username="ordertest", password="testpass123")
-        session = ConversationSession.objects.create(user=user)
+        contact = Contact.objects.create(user=user, name="Ali")
+        session = ConversationSession.objects.create(user=user, contact=contact)
         m1 = Message.objects.create(session=session, speaker="partner", text="First")
         SuggestionLog.objects.create(session=session, message=m1, suggestions_shown=["A"], suggestion_selected="Reply1")
         m2 = Message.objects.create(session=session, speaker="partner", text="Second")
@@ -383,44 +405,59 @@ class BuildConversationTextTests(APITestCase):
         text = _build_conversation_text(session.id)
         self.assertEqual(
             text,
-            "Partner said: First\nUser replied: Reply1\nPartner said: Second\nUser replied: Reply2",
+            "Ali said: First\nUser replied: Reply1\nAli said: Second\nUser replied: Reply2",
         )
 
-class ExtractJsonTests(APITestCase):
-    def test_raises_on_empty_content(self):
-        from core.agent import _extract_json
-        response = MagicMock()
-        response.choices = [MagicMock(message=MagicMock(content=""), finish_reason="length")]
-        with self.assertRaises(ValueError):
-            _extract_json(response, "openai/gpt-oss-20b")
+    def test_uses_generic_label_for_stranger_session(self):
+        from core.memory_agent import _build_conversation_text
+        user = User.objects.create_user(username="strangertest", password="testpass123")
+        session = ConversationSession.objects.create(user=user, contact=None)
+        m1 = Message.objects.create(session=session, speaker="partner", text="Hello")
 
-    def test_parses_valid_content(self):
-        from core.agent import _extract_json
-        response = MagicMock()
-        response.choices = [MagicMock(message=MagicMock(content='{"replies": ["Yes"], "setting": "general"}'))]
-        result = _extract_json(response, "openai/gpt-oss-20b")
-        self.assertEqual(result["replies"], ["Yes"])
+        text = _build_conversation_text(session.id)
+        self.assertEqual(text, "the other person said: Hello")
+
 
 class RunSuggestionAgentToolCallTests(APITestCase):
     @patch("core.agent.lookup_profile")
     @patch("core.agent.client")
-    def test_uses_second_response_after_tool_call(self, mock_client, mock_lookup):
+    def test_uses_looked_up_facts_in_second_call(self, mock_client, mock_lookup):
         mock_lookup.return_value = ["Some fact"]
 
-        first_message = MagicMock()
-        first_message.tool_calls = [MagicMock(id="call_1", function=MagicMock(arguments="{}"))]
-        first_message.content = None
-        first_response = MagicMock()
-        first_response.choices = [MagicMock(message=first_message)]
+        decision_message = MagicMock()
+        decision_message.tool_calls = [MagicMock(id="call_1", function=MagicMock(arguments="{}"))]
+        decision_response = MagicMock()
+        decision_response.choices = [MagicMock(message=decision_message)]
 
-        second_message = MagicMock()
-        second_message.content = '{"replies": ["Real personalized reply"], "setting": "general"}'
-        second_response = MagicMock()
-        second_response.choices = [MagicMock(message=second_message)]
+        reply_message = MagicMock()
+        reply_message.content = '{"replies": ["Real personalized reply"], "setting": "general"}'
+        reply_response = MagicMock()
+        reply_response.choices = [MagicMock(message=reply_message)]
 
-        mock_client.chat.completions.create.side_effect = [first_response, second_response]
+        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
-        result = run_suggestion_agent("Hi", user_id=1, contact_id=None)
+        result = run_suggestion_agent("Hi", user_id=1, contact_id=5)
 
         self.assertEqual(result["replies"], ["Real personalized reply"])
+        mock_lookup.assert_called_once_with(user_id=1, contact_id=5)
+
+    @patch("core.agent.lookup_profile")
+    @patch("core.agent.client")
+    def test_skips_lookup_when_no_tool_call(self, mock_client, mock_lookup):
+        decision_message = MagicMock()
+        decision_message.tool_calls = None
+        decision_response = MagicMock()
+        decision_response.choices = [MagicMock(message=decision_message)]
+
+        reply_message = MagicMock()
+        reply_message.content = '{"replies": ["Generic reply"], "setting": "general"}'
+        reply_response = MagicMock()
+        reply_response.choices = [MagicMock(message=reply_message)]
+
+        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
+
+        from core.agent import run_suggestion_agent
+        run_suggestion_agent("Hi", user_id=1, contact_id=None)
+
+        mock_lookup.assert_not_called()

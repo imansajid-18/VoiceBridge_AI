@@ -19,7 +19,7 @@ def _validate_and_repair_suggestion_result(result):
     if not isinstance(result, dict):
         return None
     replies = result.get("replies")
-    if not isinstance(replies, list) or not replies or not all(isinstance(r, str) for r in replies):
+    if not isinstance(replies, list) or len(replies) < 3 or not all(isinstance(r, str) for r in replies):
         return None
 
     setting = result.get("setting")
@@ -327,3 +327,10 @@ class RegisterView(APIView):
             },
             status=201
         )
+
+class GeneralMemoryDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        deleted_count, _ = MemoryEntry.objects.filter(user=request.user, contact=None).delete()
+        return Response({"status": "deleted", "count": deleted_count})

@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import openai
 from openai import OpenAI
-from .models import Message, SuggestionLog, MemoryEntry
+from .models import Message, SuggestionLog, MemoryEntry,ConversationSession
 
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -17,15 +17,29 @@ client = OpenAI(
 
 SYSTEM_PROMPT = (
     "You analyze a finished conversation to learn two separate things:\n"
-    "1. general_facts: how this user personally tends to speak (word choices, phrasing habits) "
-    "- true regardless of who they're talking to.\n"
-    "2. contact_facts: what was actually discussed with this specific person - topics, context, shared details.\n\n"
+    "1. general_facts: true about the USER, regardless of who they're talking to - their own "
+    "preferences, habits, circumstances, and phrasing style. These belong here even if they came up "
+    "while talking to a specific person, because they'll still be true in every other conversation too. "
+    "Example: if the user mentions they love coffee, or are finishing a final year project, that is a "
+    "general_fact about the user - not a contact_fact, even though it happened during this conversation.\n"
+    "2. contact_facts: true about THIS SPECIFIC PERSON, or about the relationship/shared plans between "
+    "them and the user specifically. Only the other person's own traits, preferences, and things that "
+    "wouldn't make sense outside this relationship (a plan made together, a topic specific to them) belong "
+    "here. Refer to the other person by their actual name, exactly as it appears in the conversation - "
+    "never as 'the partner' or 'the other person'.\n\n"
+    "When in doubt about which list a fact belongs to, ask: would this still be true talking to someone "
+    "completely different? If yes, it's a general_fact, not a contact_fact.\n\n"
+    "Write every fact in a natural, direct style. For general_facts, do not use the word 'User' - write "
+    "as if describing the person directly. Say 'Enjoys coffee' or 'Is finishing a final year project', "
+    "not 'User enjoys coffee' or 'The user is finishing...'.\n\n"
     "Be conservative. Only save information that is likely to remain useful in future conversations. "
     "Do not store temporary details, guesses, opinions about the user's mood or state, or assumptions "
     "not clearly stated in the conversation. A single short exchange is often not worth remembering at all "
     "- it is correct to return an empty list if nothing meets this bar.\n"
     "Respond with valid JSON only, in this exact shape: "
     '{"general_facts": ["..."], "contact_facts": ["..."]}'
+    "If a 'facts already known' list appears before the conversation, do not extract anything "
+    "already covered by it, even if you would phrase it differently. Only extract what's genuinely new.\n"
 )
 
 
@@ -45,6 +59,9 @@ def _extract_json(response, model_name):
 
 
 def _build_conversation_text(session_id):
+    session = ConversationSession.objects.select_related("contact").get(id=session_id)
+    partner_label = session.contact.name if session.contact else "the other person"
+
     messages = Message.objects.filter(session_id=session_id).order_by("timestamp")
     logs = SuggestionLog.objects.filter(
         session_id=session_id, suggestion_selected__isnull=False
@@ -53,12 +70,34 @@ def _build_conversation_text(session_id):
 
     lines = []
     for m in messages:
-        lines.append(f"Partner said: {m.text}")
+        lines.append(f"{partner_label} said: {m.text}")
         reply = replies_by_message.get(m.id)
         if reply:
             lines.append(f"User replied: {reply}")
     return "\n".join(lines)
 
+def _existing_facts_context(session):
+    general = list(
+        MemoryEntry.objects.filter(user=session.user, contact=None).values_list("fact", flat=True)
+    )
+    contact_facts = []
+    if session.contact_id:
+        contact_facts = list(
+            MemoryEntry.objects.filter(user=session.user, contact_id=session.contact_id)
+            .values_list("fact", flat=True)
+        )
+
+    if not general and not contact_facts:
+        return ""
+
+    lines = ["Facts already known - do NOT repeat these, even reworded differently:"]
+    if general:
+        lines.append("About the user:")
+        lines += [f"- {f}" for f in general]
+    if contact_facts:
+        lines.append(f"About {session.contact.name}:")
+        lines += [f"- {f}" for f in contact_facts]
+    return "\n".join(lines) + "\n\n"
 
 def run_memory_agent(session_id):
     conversation_text = _build_conversation_text(session_id)
@@ -66,14 +105,17 @@ def run_memory_agent(session_id):
     if not conversation_text.strip():
         return {"general_facts": [], "contact_facts": []}
 
+    session = ConversationSession.objects.select_related("contact", "user").get(id=session_id)
+    existing_context = _existing_facts_context(session)
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": conversation_text},
+        {"role": "user", "content": existing_context + conversation_text},
     ]
 
     try:
         response = client.chat.completions.create(
-            model="gemini-3.6-flash", messages=messages, timeout=10, max_completion_tokens=1024,
+            model="gemini-3.6-flash", messages=messages, timeout=6, max_completion_tokens=1024,
         )
         return _extract_json(response, "gemini-3.6-flash")
     except (openai.RateLimitError, openai.NotFoundError, ValueError, json.JSONDecodeError) as e:
