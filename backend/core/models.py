@@ -3,7 +3,9 @@ from django.db import models
 
 
 class Contact(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='contacts')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="contacts"
+    )
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -13,14 +15,18 @@ class Contact(models.Model):
 
 class ConversationSession(models.Model):
     STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('ended', 'Ended'),
-        ('pending_decision', 'Pending Decision'),
-        ('discarded', 'Discarded'),
+        ("active", "Active"),
+        ("ended", "Ended"),
+        ("pending_decision", "Pending Decision"),
+        ("discarded", "Discarded"),
     ]
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sessions')
-    contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sessions"
+    )
+    contact = models.ForeignKey(
+        Contact, on_delete=models.SET_NULL, null=True, blank=True, related_name="sessions"
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     last_activity_at = models.DateTimeField(auto_now=True)
@@ -30,8 +36,10 @@ class ConversationSession(models.Model):
 
 
 class Message(models.Model):
-    SPEAKER_CHOICES = [('partner', 'Partner'), ('user', 'User')]
-    session = models.ForeignKey(ConversationSession, on_delete=models.CASCADE, related_name='messages')
+    SPEAKER_CHOICES = [("partner", "Partner"), ("user", "User")]
+    session = models.ForeignKey(
+        ConversationSession, on_delete=models.CASCADE, related_name="messages"
+    )
     speaker = models.CharField(max_length=10, choices=SPEAKER_CHOICES)
     text = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -41,8 +49,10 @@ class Message(models.Model):
 
 
 class SuggestionLog(models.Model):
-    session = models.ForeignKey(ConversationSession, on_delete=models.CASCADE, related_name='suggestion_logs')
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='suggestion_logs')
+    session = models.ForeignKey(
+        ConversationSession, on_delete=models.CASCADE, related_name="suggestion_logs"
+    )
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="suggestion_logs")
     suggestions_shown = models.JSONField()
     suggestion_selected = models.TextField(null=True, blank=True)
     setting_tag = models.CharField(max_length=20, null=True, blank=True)
@@ -50,8 +60,12 @@ class SuggestionLog(models.Model):
 
 
 class MemoryEntry(models.Model):
-    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, null=True, blank=True, related_name='memory_entries')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memory_entries')
+    contact = models.ForeignKey(
+        Contact, on_delete=models.CASCADE, null=True, blank=True, related_name="memory_entries"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memory_entries"
+    )
     fact = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

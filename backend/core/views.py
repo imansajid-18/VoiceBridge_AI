@@ -15,11 +15,16 @@ from django.contrib.auth.password_validation import validate_password
 
 FALLBACK_REPLIES = ["Yes", "No", "Can you repeat that?"]
 
+
 def _validate_and_repair_suggestion_result(result):
     if not isinstance(result, dict):
         return None
     replies = result.get("replies")
-    if not isinstance(replies, list) or len(replies) < 3 or not all(isinstance(r, str) for r in replies):
+    if (
+        not isinstance(replies, list)
+        or len(replies) < 3
+        or not all(isinstance(r, str) for r in replies)
+    ):
         return None
 
     setting = result.get("setting")
@@ -100,6 +105,7 @@ class SelectSuggestionView(APIView):
 
         return Response({"status": "recorded"})
 
+
 class EndSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -129,6 +135,7 @@ class EndSessionView(APIView):
         session.save()
         return Response({"status": "ended", "saved_facts": facts})
 
+
 class SaveAsContactView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -139,7 +146,9 @@ class SaveAsContactView(APIView):
 
         try:
             session = ConversationSession.objects.get(
-                id=session_id, user=request.user, status="pending_decision",
+                id=session_id,
+                user=request.user,
+                status="pending_decision",
             )
         except ConversationSession.DoesNotExist:
             return Response({"error": "No session awaiting a decision"}, status=404)
@@ -147,7 +156,10 @@ class SaveAsContactView(APIView):
         existing = Contact.objects.filter(user=request.user, name__iexact=name).first()
         if existing and not request.data.get("confirm_duplicate"):
             return Response(
-                {"warning": "duplicate_name", "message": f"You already have a contact named {existing.name}."},
+                {
+                    "warning": "duplicate_name",
+                    "message": f"You already have a contact named {existing.name}.",
+                },
                 status=409,
             )
 
@@ -173,7 +185,9 @@ class DiscardSessionView(APIView):
     def post(self, request, session_id):
         try:
             session = ConversationSession.objects.get(
-                id=session_id, user=request.user, status="pending_decision",
+                id=session_id,
+                user=request.user,
+                status="pending_decision",
             )
         except ConversationSession.DoesNotExist:
             return Response({"error": "No session awaiting a decision"}, status=404)
@@ -181,15 +195,21 @@ class DiscardSessionView(APIView):
         session.delete()
         return Response({"status": "discarded"})
 
+
 class MemoryListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        entries = MemoryEntry.objects.filter(user=request.user).select_related("contact").order_by("-created_at")
+        entries = (
+            MemoryEntry.objects.filter(user=request.user)
+            .select_related("contact")
+            .order_by("-created_at")
+        )
 
         general = [
             {"id": e.id, "fact": e.fact, "created_at": e.created_at}
-            for e in entries if e.contact_id is None
+            for e in entries
+            if e.contact_id is None
         ]
 
         by_contact = {}
@@ -197,7 +217,8 @@ class MemoryListView(APIView):
             if e.contact_id is None:
                 continue
             by_contact.setdefault(
-                e.contact_id, {"contact_id": e.contact_id, "contact_name": e.contact.name, "facts": []}
+                e.contact_id,
+                {"contact_id": e.contact_id, "contact_name": e.contact.name, "facts": []},
             )["facts"].append({"id": e.id, "fact": e.fact, "created_at": e.created_at})
 
         return Response({"general_facts": general, "contacts": list(by_contact.values())})
@@ -228,14 +249,15 @@ class ContactMemoryDeleteView(APIView):
         deleted_count, _ = MemoryEntry.objects.filter(user=request.user, contact=contact).delete()
         return Response({"status": "deleted", "count": deleted_count})
 
+
 class ContactListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         contacts = Contact.objects.filter(user=request.user).order_by("name")
-        return Response([
-            {"id": c.id, "name": c.name, "created_at": c.created_at} for c in contacts
-        ])
+        return Response(
+            [{"id": c.id, "name": c.name, "created_at": c.created_at} for c in contacts]
+        )
 
     def post(self, request):
         name = (request.data.get("name") or "").strip()
@@ -245,7 +267,10 @@ class ContactListCreateView(APIView):
         existing = Contact.objects.filter(user=request.user, name__iexact=name).first()
         if existing and not request.data.get("confirm_duplicate"):
             return Response(
-                {"warning": "duplicate_name", "message": f"You already have a contact named {existing.name}."},
+                {
+                    "warning": "duplicate_name",
+                    "message": f"You already have a contact named {existing.name}.",
+                },
                 status=409,
             )
 
@@ -280,11 +305,15 @@ class SessionCreateView(APIView):
                 return Response({"error": "Contact not found"}, status=404)
 
         session = ConversationSession.objects.create(user=request.user, contact=contact)
-        return Response({
-            "session_id": session.id,
-            "contact_id": contact.id if contact else None,
-            "contact_name": contact.name if contact else None,
-        }, status=201)
+        return Response(
+            {
+                "session_id": session.id,
+                "contact_id": contact.id if contact else None,
+                "contact_name": contact.name if contact else None,
+            },
+            status=201,
+        )
+
 
 class RegisterView(APIView):
     permission_classes = []
@@ -294,29 +323,17 @@ class RegisterView(APIView):
         password = request.data.get("password") or ""
 
         if not username or not password:
-            return Response(
-                {"error": "Username and password are required"},
-                status=400
-            )
+            return Response({"error": "Username and password are required"}, status=400)
 
         if User.objects.filter(username__iexact=username).exists():
-            return Response(
-                {"error": "That username is already taken"},
-                status=409
-            )
+            return Response({"error": "That username is already taken"}, status=409)
 
         try:
             validate_password(password)
         except DjangoValidationError as e:
-            return Response(
-                {"error": " ".join(e.messages)},
-                status=400
-            )
-        
-        user = User.objects.create_user(
-            username=username,
-            password=password
-        )
+            return Response({"error": " ".join(e.messages)}, status=400)
+
+        user = User.objects.create_user(username=username, password=password)
 
         refresh = RefreshToken.for_user(user)
 
@@ -326,8 +343,9 @@ class RegisterView(APIView):
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
             },
-            status=201
+            status=201,
         )
+
 
 class GeneralMemoryDeleteView(APIView):
     permission_classes = [IsAuthenticated]
