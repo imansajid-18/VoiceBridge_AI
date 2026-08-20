@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useLocation,useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Mic, Send, MoreVertical, Pencil, Check } from 'lucide-react'
 import { useApiClient } from '../api/client'
 
@@ -11,6 +11,8 @@ interface SuggestResponse {
 }
 
 const CLIENT_FALLBACK_REPLIES = ['Yes', 'No', 'Can you repeat that?']
+const INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000
+const WARNING_WINDOW_MS = 20 * 1000
 
 function WaveIcon() {
   return (
@@ -30,7 +32,6 @@ function Conversation() {
 
   const [isListening, setIsListening] = useState(false)
   const [interimText, setInterimText] = useState('')
-  const [isEnding, setIsEnding] = useState(false)
   const [lastHeard, setLastHeard] = useState<string | null>(null)
   const [speechError, setSpeechError] = useState<string | null>(null)
   const recognitionRef = useRef<AppSpeechRecognition | null>(null)
@@ -45,8 +46,59 @@ function Conversation() {
   const [editDraft, setEditDraft] = useState('')
   const [freeTypeDraft, setFreeTypeDraft] = useState('')
 
+  const [isEnding, setIsEnding] = useState(false)
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false)
+  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function handleEndConversation() {
+    if (isEnding || !state?.sessionId) return
+    setIsEnding(true)
+    stopListening()
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
+    if (endTimerRef.current) clearTimeout(endTimerRef.current)
+    setShowInactivityWarning(false)
+
+    try {
+      const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
+      if (!response.ok) return
+      const data = await response.json()
+      if (data.status === 'pending_decision') {
+        navigate(`/sessions/${state.sessionId}/decide`)
+      } else {
+        navigate(`/sessions/${state.sessionId}/summary`, {
+          state: { contactName: state.contactName, savedFacts: data.saved_facts },
+        })
+      }
+    } finally {
+      setIsEnding(false)
+    }
+  }
+
+  function resetInactivityTimers() {
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
+    if (endTimerRef.current) clearTimeout(endTimerRef.current)
+    setShowInactivityWarning(false)
+
+    warningTimerRef.current = setTimeout(() => {
+      setShowInactivityWarning(true)
+      endTimerRef.current = setTimeout(() => {
+        handleEndConversation()
+      }, WARNING_WINDOW_MS)
+    }, INACTIVITY_TIMEOUT_MS - WARNING_WINDOW_MS)
+  }
+
+  useEffect(() => {
+    resetInactivityTimers()
+    return () => {
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
+      if (endTimerRef.current) clearTimeout(endTimerRef.current)
+    }
+  }, [])
+
   async function getSuggestions(transcript: string) {
     if (!state?.sessionId) return
+    resetInactivityTimers()
     setLastHeard(transcript)
     setIsThinking(true)
     setReplies([])
@@ -123,6 +175,7 @@ function Conversation() {
   }, [])
 
   function startListening() {
+    resetInactivityTimers()
     setSpeechError(null)
     setInterimText('')
     recognitionRef.current?.start()
@@ -136,6 +189,7 @@ function Conversation() {
 
   async function speakAndSelect(text: string, isCustom: boolean) {
     if (!text.trim() || !suggestionLogId || !state?.sessionId) return
+    resetInactivityTimers()
 
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
 
@@ -240,7 +294,7 @@ function Conversation() {
             type="text"
             value={freeTypeDraft}
             onChange={(e) => setFreeTypeDraft(e.target.value)}
-            placeholder="Type your own reply…"
+            placeholder="Type or edit a reply…"
             className="flex-1 bg-white/10 border border-white/15 rounded-full px-4 py-2.5 text-sm placeholder-white/35 focus:outline-none focus:border-blue"
           />
           <button
@@ -251,6 +305,18 @@ function Conversation() {
             <Send className="w-4 h-4 text-white" />
           </button>
         </div>
+
+        {showInactivityWarning && (
+          <div className="bg-amber/10 border border-amber/25 rounded-2xl p-4 mb-4 text-center">
+            <p className="text-sm text-white/80 mb-3">Still there? Ending soon due to inactivity.</p>
+            <button
+              onClick={resetInactivityTimers}
+              className="bg-amber/20 text-amber font-bold text-sm rounded-full px-5 py-2"
+            >
+              I'm still here
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-3.5 mb-4">
           <div className="flex items-center gap-1">
@@ -268,29 +334,11 @@ function Conversation() {
         </div>
 
         <button
-          onClick={async () => {
-            if (isEnding || !state?.sessionId) return
-            setIsEnding(true)
-            stopListening()
-            try {
-              const response = await apiFetch(`/sessions/${state.sessionId}/end/`, { method: 'POST' })
-              if (!response.ok) return
-              const data = await response.json()
-              if (data.status === 'pending_decision') {
-                navigate(`/sessions/${state.sessionId}/decide`)
-              } else {
-                navigate(`/sessions/${state.sessionId}/summary`, {
-                  state: { contactName: state.contactName, savedFacts: data.saved_facts },
-                })
-              }
-            } finally {
-              setIsEnding(false)
-            }
-          }}
+          onClick={handleEndConversation}
           disabled={isEnding}
           className="block mx-auto bg-white/8 border border-white/15 rounded-full px-5 py-2.5 text-xs font-semibold text-white/70 disabled:opacity-40"
         >
-          {isEnding ? (state?.contactName ? 'Saving what I learned…' : 'Ending…') : 'End conversation'}
+          {isEnding ? 'Ending…' : 'End conversation'}
         </button>
       </div>
     </div>
