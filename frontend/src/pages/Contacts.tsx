@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, MoreVertical, Plus , Brain } from 'lucide-react'
+import { Search, MoreVertical, Plus , Brain ,LogOut } from 'lucide-react'
 import { useApiClient } from '../api/client'
 import type { Contact } from '../types/contact'
+import { useAuth } from '../context/AuthContext'
+
 
 const AVATAR_COLORS = ['bg-blue', 'bg-coral', 'bg-violet', 'bg-amber']
 
@@ -14,6 +16,7 @@ function Contacts() {
   const [startingSessionFor, setStartingSessionFor] = useState<number | 'skip' | null>(null)
   const apiFetch = useApiClient()
   const navigate = useNavigate()
+  const { logout } = useAuth()
 
   useEffect(() => {
     async function loadContacts() {
@@ -66,13 +69,22 @@ function Contacts() {
       >
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl font-extrabold tracking-tight">Who's this with?</h1>
-          <button
-            onClick={() => navigate('/memory')}
-            className="text-white/50 hover:text-white p-2 rounded-full hover:bg-white/5"
-            title="View your memory"
-          >
-            <Brain className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigate('/memory')}
+              className="text-white/50 hover:text-white p-2 rounded-full hover:bg-white/5"
+              title="View your memory"
+            >
+              <Brain className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => { logout(); navigate('/login') }}
+              className="text-white/50 hover:text-warn p-2 rounded-full hover:bg-white/5"
+              title="Log out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <p className="text-sm text-white/55 mb-6">Pick a contact, or start fresh</p>
 
