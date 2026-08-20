@@ -15,13 +15,18 @@ from django.contrib.auth.password_validation import validate_password
 
 FALLBACK_REPLIES = ["Yes", "No", "Can you repeat that?"]
 
-def _validate_suggestion_result(result):
+def _validate_and_repair_suggestion_result(result):
     if not isinstance(result, dict):
-        return False
-    replies, setting = result.get("replies"), result.get("setting")
+        return None
+    replies = result.get("replies")
     if not isinstance(replies, list) or not replies or not all(isinstance(r, str) for r in replies):
-        return False
-    return isinstance(setting, str)
+        return None
+
+    setting = result.get("setting")
+    if not isinstance(setting, str):
+        setting = "general"
+
+    return {"replies": replies, "setting": setting}
 
 
 class SuggestView(APIView):
@@ -45,8 +50,10 @@ class SuggestView(APIView):
                 user_id=request.user.id,
                 contact_id=session.contact_id,
             )
-            if not _validate_suggestion_result(result):
+            repaired = _validate_and_repair_suggestion_result(result)
+            if repaired is None:
                 raise ValueError(f"Unexpected suggestion shape: {result!r}")
+            result = repaired
             is_fallback = False
         except (groq.APIError, json.JSONDecodeError, ValueError) as e:
             print(f"[SuggestView] Falling back — {type(e).__name__}: {e}")
@@ -84,9 +91,8 @@ class SelectSuggestionView(APIView):
         except SuggestionLog.DoesNotExist:
             return Response({"error": "Suggestion log not found"}, status=404)
 
-        if selected_text not in log.suggestions_shown:
+        if selected_text not in log.suggestions_shown and not request.data.get("is_custom"):
             return Response({"error": "Selected suggestion was not shown"}, status=400)
-
         log.suggestion_selected = selected_text
         log.save()
         log.session.save()

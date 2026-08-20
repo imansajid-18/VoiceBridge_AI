@@ -1,8 +1,9 @@
+import groq
+from groq import Groq
 import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
-from groq import Groq
 from .tools import lookup_profile
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -49,36 +50,41 @@ def run_suggestion_agent(transcript, user_id, contact_id=None):
         {"role": "user", "content": f'The other person just said: "{transcript}"'},
     ]
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto",
-        reasoning_effort="low",
-        timeout=3,
-    )
+    def call_groq(temperature):
+        return client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            reasoning_effort="low",
+            temperature=temperature,
+            timeout=3,
+        )
+
+    try:
+        response = call_groq(temperature=0.6)
+    except groq.BadRequestError:
+        response = call_groq(temperature=0.3)
 
     message = response.choices[0].message
 
     if message.tool_calls:
         messages.append(message)
         for tool_call in message.tool_calls:
-            result = lookup_profile(
-            user_id=user_id,
-            contact_id=contact_id
-            )
+            result = lookup_profile(user_id=user_id, contact_id=contact_id)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": json.dumps(result),
             })
 
-        second_response = client.chat.completions.create(
+        response = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=messages,
             reasoning_effort="low",
+            temperature=0.3,
             timeout=3,
         )
-        return _extract_json(second_response, "openai/gpt-oss-20b")
+        return _extract_json(response, "openai/gpt-oss-20b")
 
     return _extract_json(response, "openai/gpt-oss-20b")

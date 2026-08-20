@@ -111,6 +111,22 @@ class SelectSuggestionViewTests(APITestCase):
         self.log.refresh_from_db()
         self.assertIsNone(self.log.suggestion_selected)
 
+    def test_select_accepts_custom_text_with_flag(self):
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/select/",
+            {"suggestion_log_id": self.log.id, "selected": "Something totally different", "is_custom": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_select_still_rejects_unlisted_text_without_flag(self):
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/select/",
+            {"suggestion_log_id": self.log.id, "selected": "Not shown, not flagged"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 class LookupProfileTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="lpuser", password="testpass123")
