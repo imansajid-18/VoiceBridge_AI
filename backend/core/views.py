@@ -49,6 +49,7 @@ class SuggestView(APIView):
                 transcript,
                 user_id=request.user.id,
                 contact_id=session.contact_id,
+                session_id=session.id,
             )
             repaired = _validate_and_repair_suggestion_result(result)
             if repaired is None:

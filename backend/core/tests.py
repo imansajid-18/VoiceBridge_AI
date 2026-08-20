@@ -461,3 +461,34 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         run_suggestion_agent("Hi", user_id=1, contact_id=None)
 
         mock_lookup.assert_not_called()
+
+class RecentHistoryMessagesTests(APITestCase):
+    def test_includes_recent_exchanges_excluding_current_message(self):
+        from core.agent import _recent_history_messages
+        user = User.objects.create_user(username="histuser", password="testpass123")
+        session = ConversationSession.objects.create(user=user)
+
+        m1 = Message.objects.create(session=session, speaker="partner", text="Are you free for coffee?")
+        SuggestionLog.objects.create(session=session, message=m1, suggestions_shown=["Sure"], suggestion_selected="Sure, what time?")
+        m2 = Message.objects.create(session=session, speaker="partner", text="How about 5pm?")
+        SuggestionLog.objects.create(session=session, message=m2, suggestions_shown=["Works"], suggestion_selected="Works for me!")
+        Message.objects.create(session=session, speaker="partner", text="Great, see you then")
+
+        history = _recent_history_messages(session.id, limit=6)
+
+        self.assertEqual(history[0], {"role": "user", "content": 'The other person said: "Are you free for coffee?"'})
+        self.assertEqual(history[1], {"role": "assistant", "content": "Sure, what time?"})
+        self.assertEqual(history[2], {"role": "user", "content": 'The other person said: "How about 5pm?"'})
+        self.assertEqual(history[3], {"role": "assistant", "content": "Works for me!"})
+        self.assertEqual(len(history), 4)
+
+    def test_respects_limit(self):
+        from core.agent import _recent_history_messages
+        user = User.objects.create_user(username="histuser2", password="testpass123")
+        session = ConversationSession.objects.create(user=user)
+        for i in range(10):
+            Message.objects.create(session=session, speaker="partner", text=f"Message {i}")
+
+        history = _recent_history_messages(session.id, limit=3)
+        partner_lines = [h for h in history if h["role"] == "user"]
+        self.assertEqual(len(partner_lines), 3)
