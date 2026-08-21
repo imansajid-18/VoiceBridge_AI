@@ -395,6 +395,18 @@ class EndSessionViewTests(APITestCase):
         self.assertIsNotNone(session.ended_at)
 
     @patch("core.views.run_memory_agent")
+    def test_end_survives_memory_agent_crash(self, mock_agent):
+        mock_agent.side_effect = ValueError("Gemini returned something unparseable")
+        session = ConversationSession.objects.create(user=self.user, contact=self.contact)
+
+        response = self.client.post(f"/api/sessions/{session.id}/end/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ended")
+        session.refresh_from_db()
+        self.assertEqual(session.status, "ended")
+
+    @patch("core.views.run_memory_agent")
     def test_stranger_does_not_call_gemini(self, mock_agent):
         session = ConversationSession.objects.create(user=self.user, contact=None)
 
@@ -461,7 +473,7 @@ class SaveDiscardTests(APITestCase):
 
     @patch("core.views.run_memory_agent")
     def test_save_survives_memory_agent_crash(self, mock_agent):
-        mock_agent.side_effect = Exception("Gemini totally down")
+        mock_agent.side_effect = ValueError("Gemini returned something unparseable")
         response = self.client.post(
             f"/api/sessions/{self.session.id}/save-contact/",
             {"name": "Ahmed"},

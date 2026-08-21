@@ -1,5 +1,6 @@
 import json
 import groq
+import openai
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -126,7 +127,7 @@ class EndSessionView(APIView):
         try:
             facts = run_memory_agent(session.id)
             save_memory_facts(session, facts)
-        except Exception as e:
+        except (openai.APIError, ValueError, json.JSONDecodeError) as e:
             print(f"[EndSession] Memory extraction failed — {type(e).__name__}: {e}")
             facts = {"general_facts": [], "contact_facts": []}
 
@@ -172,7 +173,7 @@ class SaveAsContactView(APIView):
         try:
             facts = run_memory_agent(session.id)
             save_memory_facts(session, facts)
-        except Exception as e:
+        except (openai.APIError, ValueError, json.JSONDecodeError) as e:
             print(f"[SaveAsContact] Memory extraction failed — {type(e).__name__}: {e}")
             facts = {"general_facts": [], "contact_facts": []}
 
