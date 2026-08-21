@@ -191,6 +191,7 @@ function Conversation() {
 
   async function speakAndSelect(text: string, isCustom: boolean) {
     if (!text.trim()) return
+    resetInactivityTimers()
 
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
 
