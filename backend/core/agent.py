@@ -122,18 +122,33 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
                 {"role": "user", "content": profile_context + partner_line},
             ],
             reasoning_effort="low",
+            reasoning_format="hidden",
+            tool_choice="none",
             temperature=temperature,
             max_completion_tokens=300,
             response_format=SUGGESTION_SCHEMA,
             timeout=3,
         )
 
+    def parse_and_validate(response):
+        content = response.choices[0].message.content
+        if not content or not content.strip():
+            raise ValueError("openai/gpt-oss-20b returned empty content")
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            raise ValueError("Suggestion response must be a JSON object")
+        replies = parsed.get("replies")
+        if (
+            not isinstance(replies, list)
+            or len(replies) != 3
+            or not all(isinstance(r, str) and r.strip() for r in replies)
+        ):
+            raise ValueError(f"Expected exactly 3 non-empty replies, got {replies!r}")
+        return parsed
+
     try:
         response = call_reply(temperature=0.5)
-    except groq.BadRequestError:
+        return parse_and_validate(response)
+    except (groq.BadRequestError, ValueError, json.JSONDecodeError):
         response = call_reply(temperature=0.2)
-
-    content = response.choices[0].message.content
-    if not content or not content.strip():
-        raise ValueError("openai/gpt-oss-20b returned empty content")
-    return json.loads(content)
+        return parse_and_validate(response)

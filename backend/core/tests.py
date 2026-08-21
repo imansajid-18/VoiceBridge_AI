@@ -475,18 +475,18 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         decision_response.choices = [MagicMock(message=decision_message)]
 
         reply_message = MagicMock()
-        reply_message.content = '{"replies": ["Real personalized reply"], "setting": "general"}'
+        reply_message.content = '{"replies": ["Real personalized reply", "B", "C"], "setting": "general"}'
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
         mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
-
         result = run_suggestion_agent("Hi", user_id=1, contact_id=5)
 
-        self.assertEqual(result["replies"], ["Real personalized reply"])
+        self.assertEqual(result["replies"], ["Real personalized reply", "B", "C"])
         mock_lookup.assert_called_once_with(user_id=1, contact_id=5)
+        self.assertEqual(mock_client.chat.completions.create.call_count, 2)
 
     @patch("core.agent.lookup_profile")
     @patch("core.agent.client")
@@ -497,14 +497,13 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         decision_response.choices = [MagicMock(message=decision_message)]
 
         reply_message = MagicMock()
-        reply_message.content = '{"replies": ["Generic reply"], "setting": "general"}'
+        reply_message.content = '{"replies": ["Generic", "reply", "here"], "setting": "general"}'
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
         mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
-
         run_suggestion_agent("Hi", user_id=1, contact_id=None)
 
         mock_lookup.assert_not_called()
