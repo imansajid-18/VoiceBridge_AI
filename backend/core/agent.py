@@ -111,7 +111,7 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
         result = lookup_profile(user_id=user_id, contact_id=contact_id)
         profile_context = f"Known facts to use if relevant: {json.dumps(result)}\n\n"
 
-    history = _recent_history_messages(session_id, limit=4) if session_id else []
+    history = _recent_history_messages(session_id, limit=6) if session_id else []
 
     def call_reply(temperature):
         return client.chat.completions.create(

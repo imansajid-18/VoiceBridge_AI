@@ -107,7 +107,7 @@ function Conversation() {
     setFreeTypeDraft('')
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 6000)
+    const timeoutId = setTimeout(() => controller.abort(), 9000)
 
     try {
       const response = await apiFetch(`/sessions/${state.sessionId}/suggest/`, {
