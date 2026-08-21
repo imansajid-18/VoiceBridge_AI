@@ -121,6 +121,7 @@ function Conversation() {
         setReplies(CLIENT_FALLBACK_REPLIES)
         setOriginalReplies(CLIENT_FALLBACK_REPLIES)
         setSetting(null)
+        setSuggestionLogId(null)
         return
       }
       const data: SuggestResponse = await response.json()
@@ -132,6 +133,7 @@ function Conversation() {
       setReplies(CLIENT_FALLBACK_REPLIES)
       setOriginalReplies(CLIENT_FALLBACK_REPLIES)
       setSetting(null)
+      setSuggestionLogId(null)
     } finally {
       setIsThinking(false)
     }
@@ -188,19 +190,20 @@ function Conversation() {
   }
 
   async function speakAndSelect(text: string, isCustom: boolean) {
-    if (!text.trim() || !suggestionLogId || !state?.sessionId) return
-    resetInactivityTimers()
+    if (!text.trim()) return
 
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
 
-    await apiFetch(`/sessions/${state.sessionId}/select/`, {
-      method: 'POST',
-      body: JSON.stringify({
-        suggestion_log_id: suggestionLogId,
-        selected: text,
-        ...(isCustom ? { is_custom: true } : {}),
-      }),
-    })
+    if (suggestionLogId && state?.sessionId) {
+      await apiFetch(`/sessions/${state.sessionId}/select/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          suggestion_log_id: suggestionLogId,
+          selected: text,
+          ...(isCustom ? { is_custom: true } : {}),
+        }),
+      })
+    }
 
     setReplies([])
     setOriginalReplies([])
