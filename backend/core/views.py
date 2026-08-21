@@ -44,7 +44,7 @@ class SuggestView(APIView):
         except ConversationSession.DoesNotExist:
             return Response({"error": "Session not found"}, status=404)
 
-        transcript = request.data.get("transcript", "").strip()
+        transcript = (request.data.get("transcript") or "").strip()
         if not transcript:
             return Response({"error": "transcript is required"}, status=400)
 

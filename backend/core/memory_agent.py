@@ -59,6 +59,17 @@ def _extract_json(response, model_name):
         )
     return json.loads(_strip_markdown_fence(content))
 
+def _validate_memory_shape(parsed, model_name):
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{model_name} returned non-dict: {parsed!r}")
+    general = parsed.get("general_facts")
+    contact = parsed.get("contact_facts")
+    if not isinstance(general, list) or not all(isinstance(f, str) for f in general):
+        raise ValueError(f"{model_name} general_facts must be a list of strings, got {general!r}")
+    if not isinstance(contact, list) or not all(isinstance(f, str) for f in contact):
+        raise ValueError(f"{model_name} contact_facts must be a list of strings, got {contact!r}")
+    return parsed
+
 
 def _build_conversation_text(session_id):
     session = ConversationSession.objects.select_related("contact").get(id=session_id)
@@ -125,18 +136,15 @@ def run_memory_agent(session_id):
             timeout=6,
             max_completion_tokens=1024,
         )
-        return _extract_json(response, "gemini-3.6-flash")
+        return _validate_memory_shape(_extract_json(response, "gemini-3.6-flash"), "gemini-3.6-flash")
     except (openai.RateLimitError, openai.NotFoundError, ValueError, json.JSONDecodeError) as e:
         print(
             f"[MemoryAgent] gemini-3.6-flash failed ({type(e).__name__}: {e}), falling back to gemini-3.5-flash-lite"
         )
         response = client.chat.completions.create(
-            model="gemini-3.5-flash-lite",
-            messages=messages,
-            timeout=10,
-            max_completion_tokens=1024,
+            model="gemini-3.5-flash-lite", messages=messages, timeout=10, max_completion_tokens=1024,
         )
-        return _extract_json(response, "gemini-3.5-flash-lite")
+        return _validate_memory_shape(_extract_json(response, "gemini-3.5-flash-lite"), "gemini-3.5-flash-lite")
 
 
 def save_memory_facts(session, facts):

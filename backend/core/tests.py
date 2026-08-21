@@ -367,6 +367,12 @@ class SelectSuggestionViewTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_suggest_rejects_null_transcript_cleanly(self):
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/suggest/", {"transcript": None}, format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 
 class EndSessionViewTests(APITestCase):
     def setUp(self):
