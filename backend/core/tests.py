@@ -218,6 +218,26 @@ class RunSuggestionAgentToolCallTests(APITestCase):
 
         mock_lookup.assert_not_called()
 
+    @patch("core.agent.lookup_profile")
+    @patch("core.agent.client")
+    def test_filters_trailing_empty_reply_instead_of_discarding_good_ones(self, mock_client, mock_lookup):
+        decision_message = MagicMock()
+        decision_message.tool_calls = None
+        decision_response = MagicMock()
+        decision_response.choices = [MagicMock(message=decision_message)]
+
+        reply_message = MagicMock()
+        reply_message.content = '{"replies": ["Hey!", "Nice to meet you!", "What\'s up?", ""], "setting": "general"}'
+        reply_response = MagicMock()
+        reply_response.choices = [MagicMock(message=reply_message)]
+
+        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
+
+        from core.agent import run_suggestion_agent
+        result = run_suggestion_agent("Hi", user_id=1, contact_id=None)
+
+        self.assertEqual(result["replies"], ["Hey!", "Nice to meet you!", "What's up?"])
+
 
 # ======================================================================
 # INTEGRATION TESTS

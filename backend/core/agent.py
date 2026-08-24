@@ -141,12 +141,15 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
         if not isinstance(parsed, dict):
             raise ValueError("Suggestion response must be a JSON object")
         replies = parsed.get("replies")
-        if (
-            not isinstance(replies, list)
-            or len(replies) != 3
-            or not all(isinstance(r, str) and r.strip() for r in replies)
-        ):
-            raise ValueError(f"Expected exactly 3 non-empty replies, got {replies!r}")
+        if not isinstance(replies, list):
+            raise ValueError(f"Expected a list of replies, got {replies!r}")
+        # The model occasionally pads the array with a trailing empty string
+        # alongside 3 genuinely good replies. Filter those out rather than
+        # discarding real content over one blank entry.
+        non_empty_replies = [r for r in replies if isinstance(r, str) and r.strip()]
+        if len(non_empty_replies) < 3:
+            raise ValueError(f"Expected at least 3 non-empty replies, got {replies!r}")
+        parsed["replies"] = non_empty_replies[:3]
         return parsed
 
     try:
