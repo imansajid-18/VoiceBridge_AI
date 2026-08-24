@@ -270,7 +270,7 @@ python manage.py test
 coverage run manage.py test
 coverage report
 ```
-~87% overall — above the Phase 3 target of 70%.
+~92% overall — above the Phase 3 target of 70%.
 
 **Live API tests** genuinely call Groq and Gemini, run separately from the main
 suite to protect free-tier quota:
