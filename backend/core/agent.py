@@ -99,17 +99,20 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
             timeout=3,
         )
 
-    try:
-        decision_response = call_decision(temperature=0.6)
-    except groq.BadRequestError:
-        decision_response = call_decision(temperature=0.3)
-
-    decision_message = decision_response.choices[0].message
-
     profile_context = ""
-    if decision_message.tool_calls:
-        result = lookup_profile(user_id=user_id, contact_id=contact_id)
-        profile_context = f"Known facts to use if relevant: {json.dumps(result)}\n\n"
+    try:
+        try:
+            decision_response = call_decision(temperature=0.6)
+        except groq.BadRequestError:
+            decision_response = call_decision(temperature=0.3)
+
+        decision_message = decision_response.choices[0].message
+        if decision_message.tool_calls:
+            result = lookup_profile(user_id=user_id, contact_id=contact_id)
+            profile_context = f"Known facts to use if relevant: {json.dumps(result)}\n\n"
+    except groq.APIError:
+       
+        pass
 
     history = _recent_history_messages(session_id, limit=6) if session_id else []
 

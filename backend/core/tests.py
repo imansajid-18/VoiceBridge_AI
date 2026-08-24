@@ -16,6 +16,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Contact, ConversationSession, Message, SuggestionLog, MemoryEntry
+import groq
 
 
 # ======================================================================
@@ -143,7 +144,30 @@ class RecentHistoryMessagesTests(APITestCase):
         history = _recent_history_messages(session.id, limit=3)
         partner_lines = [h for h in history if h["role"] == "user"]
         self.assertEqual(len(partner_lines), 3)
+        
+class RunSuggestionAgentDecisionFailureTests(APITestCase):
+    class _FakeAPIError(groq.APIError):
+        def __init__(self):
+            pass
 
+    @patch("core.agent.lookup_profile")
+    @patch("core.agent.client")
+    def test_continues_without_personalization_if_decision_call_fails(self, mock_client, mock_lookup):
+        reply_message = MagicMock()
+        reply_message.content = '{"replies": ["A", "B", "C"], "setting": "general"}'
+        reply_response = MagicMock()
+        reply_response.choices = [MagicMock(message=reply_message)]
+
+        mock_client.chat.completions.create.side_effect = [
+            self._FakeAPIError(),
+            reply_response,
+        ]
+
+        from core.agent import run_suggestion_agent
+        result = run_suggestion_agent("Hi", user_id=1, contact_id=5)
+
+        self.assertEqual(result["replies"], ["A", "B", "C"])
+        mock_lookup.assert_not_called()
 
 class RunSuggestionAgentToolCallTests(APITestCase):
     @patch("core.agent.lookup_profile")
