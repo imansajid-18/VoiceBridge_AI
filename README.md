@@ -265,7 +265,7 @@ tiers, matching the program's testing requirement directly:
 ```bash
 python manage.py test
 ```
-46 tests. Coverage:
+47 tests. Coverage:
 ```bash
 coverage run manage.py test
 coverage report
