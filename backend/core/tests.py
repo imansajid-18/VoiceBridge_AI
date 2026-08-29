@@ -417,6 +417,14 @@ class SelectSuggestionViewTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_select_rejects_non_numeric_suggestion_log_id(self):
+        response = self.client.post(
+            f"/api/sessions/{self.session.id}/select/",
+            {"suggestion_log_id": "not-a-number", "selected": "Yes"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 
 class EndSessionViewTests(APITestCase):
     def setUp(self):
@@ -674,6 +682,10 @@ class SessionCreateTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_create_session_rejects_non_numeric_contact_id(self):
+        response = self.client.post("/api/sessions/", {"contact_id": "not-a-number"}, format="json")
+        self.assertEqual(response.status_code, 400)
 
 
 # ======================================================================

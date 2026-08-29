@@ -90,6 +90,11 @@ class SelectSuggestionView(APIView):
             return Response({"error": "suggestion_log_id and selected are required"}, status=400)
 
         try:
+            suggestion_log_id = int(suggestion_log_id)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid suggestion_log_id"}, status=400)
+
+        try:
             log = SuggestionLog.objects.get(
                 id=suggestion_log_id,
                 session_id=session_id,
@@ -300,6 +305,10 @@ class SessionCreateView(APIView):
         contact = None
 
         if contact_id:
+            try:
+                contact_id = int(contact_id)
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid contact_id"}, status=400)
             try:
                 contact = Contact.objects.get(id=contact_id, user=request.user)
             except Contact.DoesNotExist:

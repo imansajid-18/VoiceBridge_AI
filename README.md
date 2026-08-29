@@ -186,17 +186,17 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-Create `backend/.env`:
-```
+Create `.env` in the repository root (one level above `backend/`):
+
 DJANGO_SECRET_KEY=your-secret-key
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 
-DB_NAME=voicebridge
-DB_USER=your_postgres_user
-DB_PASSWORD=your_postgres_password
-DB_HOST=127.0.0.1
-DB_PORT=5432
+POSTGRES_DB=voicebridge
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
 
 GROQ_API_KEY=your-groq-key
 GEMINI_API_KEY=your-gemini-key
@@ -265,7 +265,7 @@ tiers, matching the program's testing requirement directly:
 ```bash
 python manage.py test
 ```
-48 tests. Coverage:
+50 tests. Coverage:
 ```bash
 coverage run manage.py test
 coverage report
