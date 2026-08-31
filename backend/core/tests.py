@@ -151,14 +151,14 @@ class RunSuggestionAgentDecisionFailureTests(APITestCase):
             pass
 
     @patch("core.agent.lookup_profile")
-    @patch("core.agent.client")
+    @patch("core.agent.get_client")
     def test_continues_without_personalization_if_decision_call_fails(self, mock_client, mock_lookup):
         reply_message = MagicMock()
         reply_message.content = '{"replies": ["A", "B", "C"], "setting": "general"}'
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
-        mock_client.chat.completions.create.side_effect = [
+        mock_client.return_value.chat.completions.create.side_effect = [
             self._FakeAPIError(),
             reply_response,
         ]
@@ -171,7 +171,7 @@ class RunSuggestionAgentDecisionFailureTests(APITestCase):
 
 class RunSuggestionAgentToolCallTests(APITestCase):
     @patch("core.agent.lookup_profile")
-    @patch("core.agent.client")
+    @patch("core.agent.get_client")
     def test_uses_looked_up_facts_in_second_call(self, mock_client, mock_lookup):
         mock_lookup.return_value = ["Some fact"]
 
@@ -187,7 +187,7 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
-        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
+        mock_client.return_value.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
 
@@ -195,10 +195,10 @@ class RunSuggestionAgentToolCallTests(APITestCase):
 
         self.assertEqual(result["replies"], ["Real personalized reply", "B", "C"])
         mock_lookup.assert_called_once_with(user_id=1, contact_id=5)
-        self.assertEqual(mock_client.chat.completions.create.call_count, 2)
+        self.assertEqual(mock_client.return_value.chat.completions.create.call_count, 2)
 
     @patch("core.agent.lookup_profile")
-    @patch("core.agent.client")
+    @patch("core.agent.get_client")
     def test_skips_lookup_when_no_tool_call(self, mock_client, mock_lookup):
         decision_message = MagicMock()
         decision_message.tool_calls = None
@@ -210,7 +210,7 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
-        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
+        mock_client.return_value.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
 
@@ -219,7 +219,7 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         mock_lookup.assert_not_called()
 
     @patch("core.agent.lookup_profile")
-    @patch("core.agent.client")
+    @patch("core.agent.get_client")
     def test_filters_trailing_empty_reply_instead_of_discarding_good_ones(self, mock_client, mock_lookup):
         decision_message = MagicMock()
         decision_message.tool_calls = None
@@ -231,7 +231,7 @@ class RunSuggestionAgentToolCallTests(APITestCase):
         reply_response = MagicMock()
         reply_response.choices = [MagicMock(message=reply_message)]
 
-        mock_client.chat.completions.create.side_effect = [decision_response, reply_response]
+        mock_client.return_value.chat.completions.create.side_effect = [decision_response, reply_response]
 
         from core.agent import run_suggestion_agent
         result = run_suggestion_agent("Hi", user_id=1, contact_id=None)

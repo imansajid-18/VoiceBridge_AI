@@ -1,10 +1,15 @@
 import os
 import json
+from functools import lru_cache
 import groq
 from groq import Groq
 from .tools import lookup_profile
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+@lru_cache
+def get_client():
+    return Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 
 TOOLS = [
     {
@@ -86,7 +91,7 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
     partner_line = f'The other person just said: "{transcript}"'
 
     def call_decision(temperature):
-        return client.chat.completions.create(
+        return get_client().chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": DECISION_SYSTEM_PROMPT},
@@ -117,7 +122,7 @@ def run_suggestion_agent(transcript, user_id, contact_id=None, session_id=None):
     history = _recent_history_messages(session_id, limit=6) if session_id else []
 
     def call_reply(temperature):
-        return client.chat.completions.create(
+        return get_client().chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": REPLY_SYSTEM_PROMPT},

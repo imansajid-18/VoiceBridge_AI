@@ -1,6 +1,7 @@
 import os
 import re
 import json
+from functools import lru_cache
 from pathlib import Path
 from dotenv import load_dotenv
 import openai
@@ -10,10 +11,14 @@ from .models import Message, SuggestionLog, MemoryEntry, ConversationSession
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
-client = OpenAI(
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    api_key=os.getenv("GEMINI_API_KEY"),
-)
+
+@lru_cache
+def get_client():
+    return OpenAI(
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
+
 
 SYSTEM_PROMPT = (
     "You analyze a finished conversation to learn two separate things:\n"
@@ -130,7 +135,7 @@ def run_memory_agent(session_id):
     ]
 
     try:
-        response = client.chat.completions.create(
+        response = get_client().chat.completions.create(
             model="gemini-3.6-flash",
             messages=messages,
             timeout=6,
@@ -141,7 +146,7 @@ def run_memory_agent(session_id):
         print(
             f"[MemoryAgent] gemini-3.6-flash failed ({type(e).__name__}: {e}), falling back to gemini-3.5-flash-lite"
         )
-        response = client.chat.completions.create(
+        response = get_client().chat.completions.create(
             model="gemini-3.5-flash-lite", messages=messages, timeout=10, max_completion_tokens=1024,
         )
         return _validate_memory_shape(_extract_json(response, "gemini-3.5-flash-lite"), "gemini-3.5-flash-lite")
